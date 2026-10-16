@@ -1,0 +1,2474 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U-Boot VIIC — Simulador</title>
+<style>
+:root{
+  --panel:rgba(16,20,18,.86); --panel2:rgba(26,32,28,.92); --line:#3e4b40; --txt:#d8e0cf; --dim:#8c9a88;
+  --brass:#c9a54e; --red:#d0453a; --green:#79c37c; --amber:#e0b040;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:var(--txt);font-family:"Courier New",Courier,monospace;font-size:13px}
+button{font-family:inherit;font-size:12px;background:#27302a;color:var(--txt);border:1px solid #4b5a4d;border-radius:3px;padding:3px 7px;cursor:pointer}
+button:hover{background:#34403a;border-color:var(--brass)}
+button.on{background:#4a3f1c;border-color:var(--brass);color:#ffe9a8}
+button.red{background:#4a1d19;border-color:#8a3a32}
+button.red:hover{background:#6a2620}
+input,select{font-family:inherit;font-size:12px;background:#111613;color:#ffe9a8;border:1px solid #4b5a4d;border-radius:2px;padding:2px 4px}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ov,#mapCv{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#mapCv{display:none;pointer-events:auto;cursor:crosshair}
+#scopeMask{position:fixed;inset:0;pointer-events:none;display:none;
+  background:radial-gradient(circle at 50% 46%, transparent 0, transparent 41vmin, rgba(0,0,0,.92) 42vmin, #000 46vmin)}
+#binoMask{position:fixed;inset:0;pointer-events:none;display:none;
+  background:radial-gradient(ellipse 30vmin 30vmin at calc(50% - 21vmin) 46%, transparent 0, transparent 97%, rgba(0,0,0,0) 98%),
+             radial-gradient(ellipse 30vmin 30vmin at calc(50% + 21vmin) 46%, transparent 0, transparent 97%, rgba(0,0,0,0) 98%)}
+#flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0}
+#redlight{position:fixed;inset:0;pointer-events:none;background:#600;opacity:0;mix-blend-mode:multiply}
+#hud{position:fixed;inset:0;pointer-events:none}
+#hud > *{pointer-events:auto}
+#top{position:absolute;top:0;left:0;right:0;height:38px;display:flex;align-items:center;gap:10px;padding:0 10px;
+  background:linear-gradient(#0d110f,rgba(13,17,15,.75));border-bottom:1px solid var(--line)}
+#tabs{display:flex;gap:4px;flex-wrap:wrap}
+#title{color:var(--brass);font-weight:bold;letter-spacing:2px;margin-right:6px;white-space:nowrap}
+#clockBox{margin-left:auto;display:flex;align-items:center;gap:6px;white-space:nowrap}
+#clock{color:#ffe9a8;font-size:15px}
+#tc{min-width:34px;text-align:center;color:var(--amber)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+#objBox{position:absolute;top:46px;left:8px;width:330px;max-height:42vh;overflow:auto}
+#objBox h3{margin:0 0 6px;color:var(--brass);font-size:13px;cursor:pointer}
+#objList{margin:0;padding-left:0;list-style:none}
+#objList li{padding:2px 0;color:var(--dim)}
+#objList li.cur{color:#ffe9a8}
+#objList li.done{color:var(--green)}
+#objList li.fail{color:var(--red)}
+#objHint{margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;line-height:1.35;color:#cfd8c4;white-space:pre-line}
+#msgBox{position:absolute;top:46px;right:8px;width:min(420px,40vw);pointer-events:none;background:none;border:none}
+body.tdcOpen #msgBox{right:386px;width:min(420px,calc(100vw - 740px))}
+body.tdcOpen .side#tdc{top:46px}
+body.hydroOpen #objBox{max-height:calc(100vh - 178px - 360px - 60px)}
+.msg{background:rgba(10,14,12,.78);border-left:3px solid var(--brass);margin-bottom:3px;padding:3px 7px;line-height:1.3}
+.msg.warn{border-color:var(--red);color:#ffcbbf}
+.msg.good{border-color:var(--green);color:#d6ffd0}
+.msg.radio{border-color:#6aa0d0;color:#d5e8ff}
+.msg .ts{color:var(--dim);margin-right:6px}
+#viewInfo{position:absolute;left:50%;transform:translateX(-50%);bottom:178px;text-align:center;pointer-events:none;
+  color:#ffe9a8;text-shadow:0 0 4px #000,0 0 2px #000;white-space:pre-line;line-height:1.4}
+#panel{position:absolute;left:0;right:0;bottom:0;height:170px;display:flex;gap:8px;padding:6px 8px;overflow-x:auto;overflow-y:hidden;
+  background:linear-gradient(rgba(14,18,16,.82),#0b0e0c);border-top:1px solid var(--line)}
+#tele{display:flex;flex-direction:column;gap:2px;width:128px}
+#tele .th{color:var(--brass);text-align:center;font-size:11px}
+#tele button{padding:1px 4px;font-size:11px;text-align:left}
+#instr{width:440px;height:158px;flex:none}
+#ctrl{display:flex;flex-direction:column;gap:5px;min-width:300px}
+#ctrl .row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+#ctrl .lab{color:var(--dim);width:110px}
+#ctrl .val{color:#ffe9a8;min-width:92px;text-align:center;font-size:14px}
+#status{flex:1;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-content:start;min-width:220px}
+#status .k{color:var(--dim)}
+.bar{height:10px;background:#1a201c;border:1px solid #3b473d;position:relative;margin-top:2px}
+.bar > i{position:absolute;left:0;top:0;bottom:0;background:var(--green)}
+#modeLine{grid-column:1/3;color:var(--amber);min-height:16px}
+.side{position:absolute;right:8px;width:370px;top:210px;bottom:178px;overflow:auto}
+#tdc h3,#hydro h3{margin:0 0 6px;color:var(--brass);font-size:13px}
+#tdc h4{margin:8px 0 4px;color:var(--brass);font-size:12px;border-top:1px dashed var(--line);padding-top:6px}
+.tg{display:grid;grid-template-columns:118px 26px 1fr 26px;gap:3px 4px;align-items:center}
+.tg input{width:100%;text-align:center}
+.tg .ro{color:#ffe9a8;text-align:center}
+.tubes{display:flex;flex-direction:column;gap:3px}
+.tube{display:flex;justify-content:space-between;border:1px solid #3b473d;padding:2px 6px;cursor:pointer;border-radius:2px}
+.tube.sel{border-color:var(--brass);background:#2d2816}
+.tube .st-ok{color:var(--green)}
+.tube .st-rl{color:var(--amber)}
+.tube .st-em{color:var(--dim)}
+#sol{line-height:1.5}
+#sol b{color:#ffe9a8}
+#tFire{width:100%;padding:8px;font-size:15px;margin-top:6px;letter-spacing:3px}
+#hydro{left:8px;right:auto;width:300px;top:auto;bottom:178px;height:auto;max-height:360px}
+#hydroCv{width:230px;height:230px;display:block;margin:0 auto}
+#hydroList{margin-top:4px;line-height:1.35;font-size:12px}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:10}
+.modal .card{background:#121714;border:1px solid var(--brass);border-radius:6px;max-width:880px;width:calc(100% - 32px);max-height:92vh;overflow:auto;padding:22px 26px;line-height:1.45}
+.card h1{margin:0;color:var(--brass);letter-spacing:4px;font-size:26px}
+.card h2{margin:4px 0 14px;color:#cfd8c4;font-weight:normal;font-size:15px}
+.card h3{color:var(--brass);margin:16px 0 6px;font-size:14px}
+.card p{margin:6px 0}
+.card table{border-collapse:collapse;width:100%}
+.card td{padding:2px 6px;border-bottom:1px solid #26302a;vertical-align:top}
+.card td:first-child{color:#ffe9a8;white-space:nowrap}
+.card .go{font-size:18px;padding:10px 26px;letter-spacing:3px;margin-top:14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
+.recItem{display:flex;gap:12px;align-items:center;border:1px solid #2f3a31;padding:6px;margin-bottom:6px;border-radius:3px}
+.recItem.sel{border-color:var(--brass);background:#221f12}
+.recItem canvas{background:#d9d2b6;border:1px solid #555;flex:none}
+.recItem .d{flex:1}
+.recItem b{color:#ffe9a8}
+.note{color:var(--dim);font-size:12px}
+.grade{font-size:30px;color:var(--brass);letter-spacing:3px}
+@media (max-width:1150px){#title{display:none} #tabs button{padding:2px 4px;font-size:11px} #clockBox button{padding:2px 5px}}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:var(--brass);font-size:18px;z-index:20;background:#000}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="scopeMask"></div>
+<canvas id="ov"></canvas>
+<canvas id="mapCv"></canvas>
+<div id="redlight"></div>
+<div id="flash"></div>
+
+<div id="hud" class="hidden">
+  <div id="top">
+    <span id="title">U-BOOT VIIC</span>
+    <div id="tabs">
+      <button data-view="bridge">Pont [B]</button>
+      <button data-view="periscope">Periscopi [P]</button>
+      <button data-view="external">Exterior [E]</button>
+      <button data-view="map">Carta [M]</button>
+      <span style="width:8px"></span>
+      <button id="tabTdc">TDC [T]</button>
+      <button id="tabHydro">Hidròfon [H]</button>
+      <button id="tabRec">Reconeixement [I]</button>
+      <button id="tabHelp">Ajuda [F1/?]</button>
+    </div>
+    <div id="clockBox">
+      <span id="clock">07:30:00</span>
+      <button id="tcDown" title="Compressió de temps − [-]">−</button><span id="tc">×1</span><button id="tcUp" title="Compressió de temps + [+]">+</button>
+      <button id="btnPause">Pausa [Esc]</button>
+    </div>
+  </div>
+
+  <div id="objBox" class="box">
+    <h3 id="objTitle">▾ Missió d'entrenament</h3>
+    <div id="objBody"><ol id="objList"></ol><div id="objHint"></div></div>
+  </div>
+  <div id="msgBox"></div>
+  <div id="viewInfo"></div>
+
+  <div id="panel">
+    <div id="tele"><div class="th">TELÈGRAF [W/S]</div></div>
+    <canvas id="instr"></canvas>
+    <div id="ctrl">
+      <div class="row"><span class="lab">Rumb ordenat [A/D]</span>
+        <button data-hd="-10">«</button><button data-hd="-1">‹</button><span class="val" id="ordHdg">070°</span><button data-hd="1">›</button><button data-hd="10">»</button></div>
+      <div class="row"><span class="lab">Cota ordenada [R/F]</span>
+        <button data-dp="-10">«</button><button data-dp="-1">‹</button><span class="val" id="ordDepth">SUPERFÍCIE</span><button data-dp="1">›</button><button data-dp="10">»</button></div>
+      <div class="row"><button id="bSurf">Emergir [N]</button><button id="bPeriD">Cota periscòpica [G]</button><button id="bAlarm" class="red">ALARM! [C]</button></div>
+      <div class="row"><button id="bScope">Periscopi ↑/↓ [U]</button><button id="bSilent">Marxa silenciosa [Q]</button><button id="bDeep">80 m</button><button id="bDeep2">120 m</button></div>
+    </div>
+    <div id="status">
+      <span class="k">Bateries</span><div><div class="bar"><i id="barBat"></i></div></div>
+      <span class="k">Aire</span><div><div class="bar"><i id="barAir"></i></div></div>
+      <span class="k">Buc</span><div><div class="bar"><i id="barHull"></i></div></div>
+      <span class="k">Sonda</span><span id="sonda">—</span>
+      <span class="k">Torpedes</span><span id="torpCount">—</span>
+      <span id="modeLine"></span>
+    </div>
+  </div>
+
+  <div id="tdc" class="box side hidden"></div>
+  <div id="hydro" class="box side hidden">
+    <h3>Hidròfon (GHG)</h3>
+    <canvas id="hydroCv"></canvas>
+    <div id="hydroList"></div>
+  </div>
+</div>
+
+<div id="rec" class="modal hidden"><div class="card">
+  <h1 style="font-size:20px">MANUAL DE RECONEIXEMENT</h1>
+  <h2>Seleccioneu la classe del blanc. L'alçada del pal s'utilitza a l'estadímetre per calcular la distància.</h2>
+  <div id="recList"></div>
+  <button id="recClose">Tancar [I / Esc]</button>
+</div></div>
+
+<div id="help" class="modal hidden"><div class="card">
+  <h1 style="font-size:20px">CONTROLS I PROCEDIMENTS</h1>
+  <div class="cols">
+  <div>
+  <h3>Vistes</h3>
+  <table>
+  <tr><td>B</td><td>Pont (UZO / prismàtics). Només en superfície.</td></tr>
+  <tr><td>P</td><td>Periscopi d'atac. Cal alçar-lo (U) a cota periscòpica.</td></tr>
+  <tr><td>E</td><td>Càmera exterior. V canvia el subjecte (submarí / torpede / blanc).</td></tr>
+  <tr><td>M</td><td>Carta de navegació. Clic dret: rumb cap al punt. Arrossegar: moure. Roda: zoom.</td></tr>
+  <tr><td>T / H / I</td><td>TDC, hidròfon, manual de reconeixement.</td></tr>
+  </table>
+  <h3>Maniobra</h3>
+  <table>
+  <tr><td>W / S</td><td>Telègraf de màquines (avant / enrere)</td></tr>
+  <tr><td>A / D</td><td>Rumb ordenat −/+ 5° (Maj: 1°)</td></tr>
+  <tr><td>R / F</td><td>Cota ordenada −/+ 5 m (Maj: 1 m)</td></tr>
+  <tr><td>C</td><td>ALARM! Immersió ràpida a 40 m</td></tr>
+  <tr><td>G</td><td>Cota periscòpica (13 m)</td></tr>
+  <tr><td>N</td><td>Emergir (buidar llasts)</td></tr>
+  <tr><td>Q</td><td>Marxa silenciosa (màx. 3 nusos, menys soroll)</td></tr>
+  <tr><td>+ / −</td><td>Compressió de temps</td></tr>
+  <tr><td>Esc</td><td>Pausa</td></tr>
+  </table>
+  </div>
+  <div>
+  <h3>Òptica i atac</h3>
+  <table>
+  <tr><td>Ratolí / ← →</td><td>Girar el periscopi o la vista (Maj: lent)</td></tr>
+  <tr><td>Z</td><td>Augments (periscopi 1,5× / 6×; prismàtics 7×)</td></tr>
+  <tr><td>U</td><td>Alçar / abaixar periscopi</td></tr>
+  <tr><td>I</td><td>Identificar la classe del blanc</td></tr>
+  <tr><td>X</td><td>Estadímetre: roda / ↑↓ per posar la línia a la punta del pal, Enter per enviar distància + demora al TDC i fer una marca</td></tr>
+  <tr><td>Espai</td><td>Enviar només la demora actual al TDC</td></tr>
+  <tr><td>L</td><td>Fixar blanc (només amb assistència activada)</td></tr>
+  <tr><td>1–5</td><td>Seleccionar tub (5 = popa)</td></tr>
+  <tr><td>Enter</td><td>FOC! (fora de l'estadímetre)</td></tr>
+  </table>
+  <h3>Procediment de punteria</h3>
+  <p>1) Apunteu el periscopi al blanc. 2) Identifiqueu-lo (I). 3) Estadímetre (X) → Enter: el TDC rep demora i distància i es fa una marca. 4) Repetiu la marca al cap d'un minut com a mínim: el TDC calcula rumb i velocitat del blanc. 5) Comproveu l'AoB i l'angle giroscòpic al TDC, i dispareu.</p>
+  <p class="note">El TDC (Vorhaltrechner) manté la posició del blanc estimada de manera contínua. Podeu corregir qualsevol valor a mà.</p>
+  </div>
+  </div>
+  <button id="helpClose" class="go">Continuar</button>
+</div></div>
+
+<div id="start" class="modal hidden"><div class="card">
+  <h1>U-BOOT VIIC</h1>
+  <h2>Simulador de submarí — Missió d'entrenament · 25a Flotilla d'Instrucció · Badia de Danzig, maig de 1941</h2>
+  <div class="cols">
+  <div>
+  <h3>Ordres de la flotilla</h3>
+  <p>Herr Oberleutnant, abans d'anar al front de l'Atlàntic, el vostre <b>U-boot Tipus VIIC</b> ha de superar l'exercici tàctic final (<i>Taktische Ausbildung</i>) a la badia de Danzig:</p>
+  <ol style="padding-left:18px;margin:6px 0">
+    <li>Navegació en superfície fins al punt A.</li>
+    <li>Immersió d'alarma i cota periscòpica.</li>
+    <li>Atac amb torpedes al buc-blanc fondejat <b>HANSA</b>.</li>
+    <li>Atac a un blanc en moviment, el mercant <b>WOTAN</b>.</li>
+    <li>Evasió d'un atac antisubmarí d'exercici del torpediner <b>T 11</b>.</li>
+    <li>Retorn a la base (punt H).</li>
+  </ol>
+  <p>Mar de força 3, visibilitat moderada, termoclina a ~70 m, fons a 240 m. Cota de prova: 220 m.</p>
+  </div>
+  <div>
+  <h3>Opcions de realisme</h3>
+  <p><label><input type="checkbox" id="optAssist"> Assistència de punteria: en fixar un blanc (L), el TDC rep les dades exactes.</label></p>
+  <p><label><input type="checkbox" id="optMap"> Mostrar tots els vaixells a la carta (no només els avistats).</label></p>
+  <p><label><input type="checkbox" id="optSound" checked> So</label></p>
+  <p class="note">Mode realista (recomanat): sense assistència. La distància es mesura amb l'estadímetre i el rumb/velocitat del blanc amb marques successives.</p>
+  <h3>Controls bàsics</h3>
+  <p>W/S telègraf · A/D rumb · R/F cota · C alarma · G cota periscòpica · N emergir · P periscopi · U alçar periscopi · X estadímetre · T TDC · Enter foc · M carta · +/− temps · F1 ajuda</p>
+  </div>
+  </div>
+  <button id="go" class="go">ZARPAR</button>
+  <span class="note" style="margin-left:12px">Requereix WebGL. Funciona en qualsevol navegador modern.</span>
+</div></div>
+
+<div id="debrief" class="modal hidden"><div class="card" id="debriefCard"></div></div>
+<div id="loading">Carregant el simulador…</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+/* =========================================================================
+   UTILITATS
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+const D2R = Math.PI/180, R2D = 180/Math.PI, KN = 0.514444;
+const norm360 = a => ((a % 360) + 360) % 360;
+const angDiff = (a, b) => { let d = norm360(a - b); if (d > 180) d -= 360; return d; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dirv = h => ({ x: Math.sin(h * D2R), y: Math.cos(h * D2R) });
+const brgTo = (ax, ay, bx, by) => norm360(Math.atan2(bx - ax, by - ay) * R2D);
+const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const f3 = a => String(Math.round(norm360(a)) % 360).padStart(3, '0');
+const fmtTime = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s/60)} min ${String(s%60).padStart(2,'0')} s`; };
+
+/* =========================================================================
+   ESTAT GLOBAL
+   ========================================================================= */
+const settings = { assist: false, mapAll: false, sound: true };
+let started = false, paused = true;
+let simT = 0;
+const START_CLOCK = 7*3600 + 30*60;
+const TC_STEPS = [1, 2, 4, 8, 16, 32, 64];
+let tcIdx = 0;
+let view = 'bridge';
+let showTdc = false, showHydro = false;
+const SURF = 4.7;          // calat en superfície (cota de quilla)
+const PERI_DEPTH = 13;
+const SEABED = 240;
+const LAYER = 70;          // termoclina
+let shake = 0;
+
+const TELE = [
+  { n: 'Enrere tota',  s: -6,   e: -4 },
+  { n: 'Enrere lenta', s: -3,   e: -2 },
+  { n: 'Stop',         s: 0,    e: 0 },
+  { n: 'Avant lenta',  s: 6,    e: 2 },
+  { n: 'Avant mitja',  s: 10,   e: 4 },
+  { n: 'Avant tota',   s: 14,   e: 6 },
+  { n: 'Avant màxima', s: 17.7, e: 7.6 },
+];
+
+const sub = {
+  x: 0, y: 0, hdg: 70, ordHdg: 70, rudder: 0, v: 0, tele: 2,
+  depth: SURF, ordDepth: SURF, vz: 0, pitch: 0, roll: 0, bob: 0,
+  battery: 100, air: 100, hull: 100, alarm: false, floodT: 0, diesel: true, dieselDelay: 0, silent: false,
+  periUp: false, peri: 0, track: [], trackT: 0, bottomed: false, creakT: 5, lost: false,
+  tubes: [], reserveBow: [], reserveStern: [], reloadBow: null, reloadStern: null, selTube: 0,
+};
+sub.tubes = [
+  { id: 1, stern: false, type: 'G7e' }, { id: 2, stern: false, type: 'G7e' },
+  { id: 3, stern: false, type: 'G7a' }, { id: 4, stern: false, type: 'G7a' },
+  { id: 5, stern: true,  type: 'G7e' },
+];
+sub.reserveBow = ['G7e', 'G7a', 'G7e', 'G7a', 'G7e', 'G7e'];
+sub.reserveStern = ['G7e'];
+
+const TORP = {
+  G7e: { name: 'G7e (elèctric, sense estela)', speeds: { 30: 5000 } },
+  G7a: { name: 'G7a (vapor, deixa estela)', speeds: { 30: 12500, 40: 7500, 44: 5000 } },
+};
+const RELOAD_TIME = 8 * 60;
+
+/* =========================================================================
+   ÀUDIO (sintetitzat amb WebAudio)
+   ========================================================================= */
+const AudioSys = {
+  ctx: null, master: null,
+  init() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+    } catch (e) { return; }
+    const c = this.ctx;
+    this.master = c.createGain(); this.master.gain.value = settings.sound ? 0.7 : 0; this.master.connect(c.destination);
+    // buffers de soroll
+    const len = c.sampleRate * 3;
+    this.white = c.createBuffer(1, len, c.sampleRate);
+    this.brown = c.createBuffer(1, len, c.sampleRate);
+    const w = this.white.getChannelData(0), b = this.brown.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { const r = Math.random()*2-1; w[i] = r; last = (last + 0.02*r)/1.02; b[i] = last*3.5; }
+    // mar
+    this.seaSrc = this.loop(this.white); this.seaF = c.createBiquadFilter(); this.seaF.type = 'lowpass'; this.seaF.frequency.value = 600;
+    this.seaG = c.createGain(); this.seaG.gain.value = 0;
+    this.seaSrc.connect(this.seaF).connect(this.seaG).connect(this.master);
+    this.seaLfo = 0;
+    // dièsel
+    this.dsl = c.createOscillator(); this.dsl.type = 'sawtooth'; this.dsl.frequency.value = 38;
+    this.dslF = c.createBiquadFilter(); this.dslF.type = 'lowpass'; this.dslF.frequency.value = 160;
+    this.dslG = c.createGain(); this.dslG.gain.value = 0;
+    this.dsl.connect(this.dslF).connect(this.dslG).connect(this.master); this.dsl.start();
+    this.dslN = this.loop(this.brown); this.dslNG = c.createGain(); this.dslNG.gain.value = 0;
+    const nf = c.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 300;
+    this.dslN.connect(nf).connect(this.dslNG).connect(this.master);
+    // motor elèctric
+    this.el = c.createOscillator(); this.el.type = 'sine'; this.el.frequency.value = 180;
+    this.elG = c.createGain(); this.elG.gain.value = 0;
+    this.el.connect(this.elG).connect(this.master); this.el.start();
+    // interior / ventilació
+    this.hum = this.loop(this.brown); this.humF = c.createBiquadFilter(); this.humF.type = 'bandpass'; this.humF.frequency.value = 120;
+    this.humG = c.createGain(); this.humG.gain.value = 0;
+    this.hum.connect(this.humF).connect(this.humG).connect(this.master);
+  },
+  loop(buf) { const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; },
+  setMute(m) { if (this.master) this.master.gain.value = m ? 0 : 0.7; },
+  update(dt) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const kn = Math.abs(sub.v) / KN;
+    const surfaced = sub.depth <= SURF + 0.6;
+    const quiet = paused ? 0 : 1;
+    const ext = view === 'bridge' || view === 'external';
+    const under = camUnder;
+    this.seaLfo += dt;
+    const seaV = quiet * (under ? 0.05 : (ext || view === 'periscope' ? 0.22 + 0.08*Math.sin(this.seaLfo*0.7) : 0.06));
+    this.seaG.gain.setTargetAtTime(seaV, t, 0.3);
+    this.seaF.frequency.setTargetAtTime(under ? 250 : 700, t, 0.3);
+    const dOn = sub.diesel && surfaced;
+    this.dslG.gain.setTargetAtTime(quiet * (dOn ? 0.05 + kn*0.006 : 0), t, 0.5);
+    this.dslNG.gain.setTargetAtTime(quiet * (dOn ? 0.06 + kn*0.006 : 0), t, 0.5);
+    this.dsl.frequency.setTargetAtTime(30 + kn*1.6, t, 0.8);
+    this.elG.gain.setTargetAtTime(quiet * (!dOn ? Math.min(0.03, kn*0.004) : 0), t, 0.5);
+    this.el.frequency.setTargetAtTime(120 + kn*40, t, 0.5);
+    this.humG.gain.setTargetAtTime(quiet * (view === 'map' || !ext ? (sub.silent ? 0.015 : 0.05) : 0.0), t, 0.5);
+  },
+  env(node, g, a, d, peak) { g.gain.setValueAtTime(0.0001, a); g.gain.exponentialRampToValueAtTime(peak, a + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, a + d); },
+  ping(vol) {
+    if (!this.ctx || vol < 0.01) return;
+    const c = this.ctx, t = c.currentTime;
+    for (const [dl, v] of [[0, 1], [0.35, 0.35], [0.8, 0.12]]) {
+      const o = c.createOscillator(); o.frequency.value = 1450; const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t+dl); g.gain.exponentialRampToValueAtTime(0.25*vol*v, t+dl+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+dl+0.7);
+      o.connect(g).connect(this.master); o.start(t+dl); o.stop(t+dl+0.8);
+    }
+  },
+  boom(vol, low = false) {
+    if (!this.ctx || vol < 0.01) return;
+    const c = this.ctx, t = c.currentTime;
+    const s = c.createBufferSource(); s.buffer = this.brown;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = low ? 220 : 700;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.min(1.5, vol*1.4), t+0.03); g.gain.exponentialRampToValueAtTime(0.0001, t+3.5);
+    s.connect(f).connect(g).connect(this.master); s.start(t); s.stop(t+3.6);
+    const o = c.createOscillator(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(25, t+1.5);
+    const g2 = c.createGain(); g2.gain.setValueAtTime(0.0001, t); g2.gain.exponentialRampToValueAtTime(Math.min(1, vol*0.8), t+0.02); g2.gain.exponentialRampToValueAtTime(0.0001, t+2);
+    o.connect(g2).connect(this.master); o.start(t); o.stop(t+2.1);
+  },
+  launch() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    const s = c.createBufferSource(); s.buffer = this.white;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(1500, t+0.6);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t+0.05); g.gain.exponentialRampToValueAtTime(0.0001, t+1.0);
+    s.connect(f).connect(g).connect(this.master); s.start(t); s.stop(t+1.1);
+  },
+  clank() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 330; const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.15, t+0.01); g.gain.exponentialRampToValueAtTime(0.0001, t+0.4);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t+0.5);
+  },
+  creak() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'triangle'; const f0 = 60 + Math.random()*60;
+    o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0*(0.7+Math.random()*0.6), t+1.4);
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 300;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t+0.3); g.gain.exponentialRampToValueAtTime(0.0001, t+1.5);
+    o.connect(f).connect(g).connect(this.master); o.start(t); o.stop(t+1.6);
+  },
+  bell() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    for (let i = 0; i < 14; i++) {
+      const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 880; const g = c.createGain();
+      const a = t + i*0.13;
+      g.gain.setValueAtTime(0.0001, a); g.gain.exponentialRampToValueAtTime(0.08, a+0.005); g.gain.exponentialRampToValueAtTime(0.0001, a+0.11);
+      o.connect(g).connect(this.master); o.start(a); o.stop(a+0.12);
+    }
+  },
+  click() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.frequency.value = 1800; const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t+0.003); g.gain.exponentialRampToValueAtTime(0.0001, t+0.05);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t+0.06);
+  },
+};
+
+/* =========================================================================
+   RENDER: escena, cel, mar, partícules
+   ========================================================================= */
+THREE.ColorManagement.enabled = false;
+const glCanvas = $('gl');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
+} catch (e) {
+  $('loading').textContent = 'Aquest navegador no suporta WebGL.';
+  throw e;
+}
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.3, 40000);
+camera.rotation.order = 'YXZ';
+
+const FOG_COL = new THREE.Color(0.70, 0.76, 0.80);
+const FOG_DEN = 0.000105;
+scene.fog = new THREE.FogExp2(FOG_COL.clone(), FOG_DEN);
+renderer.setClearColor(FOG_COL);
+
+// sol: azimut 115°, elevació 24°
+const SUN_DIR = (() => { const az = 115*D2R, el = 24*D2R; return new THREE.Vector3(Math.sin(az)*Math.cos(el), Math.sin(el), -Math.cos(az)*Math.cos(el)).normalize(); })();
+const hemi = new THREE.HemisphereLight(0xc8d6e0, 0x34444a, 2.2);
+scene.add(hemi);
+const sunLight = new THREE.DirectionalLight(0xfff0dc, 2.6);
+sunLight.position.copy(SUN_DIR).multiplyScalar(1000);
+scene.add(sunLight);
+const flashLight = new THREE.PointLight(0xffd090, 0, 600, 1.5);
+scene.add(flashLight);
+
+const SKY_GLSL = `
+uniform vec3 uSunDir;
+vec3 skyCol(vec3 d){
+  float y = d.y;
+  vec3 hor = vec3(0.72,0.78,0.82);
+  vec3 zen = vec3(0.30,0.47,0.68);
+  vec3 c = mix(hor, zen, pow(clamp(y,0.0,1.0), 0.55));
+  if (y < 0.0) c = mix(hor, vec3(0.45,0.52,0.55), clamp(-y*4.0,0.0,1.0));
+  float s = max(dot(d, uSunDir), 0.0);
+  c += vec3(1.0,0.92,0.75) * (pow(s, 900.0)*6.0 + pow(s, 12.0)*0.22);
+  // núvols suaus
+  return c;
+}`;
+
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(30000, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { uSunDir: { value: SUN_DIR } },
+    vertexShader: `varying vec3 vDir; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vDir = normalize(wp.xyz - cameraPosition); gl_Position = projectionMatrix*viewMatrix*wp; gl_Position.z = gl_Position.w*0.99999; }`,
+    fragmentShader: SKY_GLSL + `varying vec3 vDir;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+      float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+        return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+      void main(){ vec3 d = normalize(vDir); vec3 c = skyCol(d);
+        if (d.y > 0.0) { vec2 uv = d.xz/(d.y+0.08)*2.5; float n = noise(uv)*0.55 + noise(uv*2.3)*0.3 + noise(uv*5.1)*0.15;
+          float cl = smoothstep(0.55, 0.85, n) * smoothstep(0.0, 0.15, d.y); c = mix(c, vec3(0.92,0.93,0.94), cl*0.75); }
+        gl_FragColor = vec4(c,1.0); }`,
+  })
+);
+sky.renderOrder = -10;
+scene.add(sky);
+
+// ---- onades (Gerstner) compartides CPU / GPU ----
+const WAVES_DEF = [
+  { dir: 250, L: 64, A: 0.50 },
+  { dir: 232, L: 37, A: 0.30 },
+  { dir: 272, L: 22, A: 0.15 },
+  { dir: 214, L: 13, A: 0.07 },
+  { dir: 296, L: 96, A: 0.30 },
+];
+const WAVES = WAVES_DEF.map(w => {
+  const k = 2*Math.PI/w.L;
+  return { k, A: w.A, c: Math.sqrt(9.81/k), dx: Math.sin(w.dir*D2R), dz: -Math.cos(w.dir*D2R), Q: 0.55/(k*w.A*WAVES_DEF.length) };
+});
+function waveH(X, Z, t = simT) {
+  let h = 0;
+  for (const w of WAVES) h += w.A * Math.sin(w.k*(w.dx*X + w.dz*Z - w.c*t));
+  return h;
+}
+const hAt = (x, y) => waveH(x, -y);   // coordenades de simulació (x est, y nord)
+
+function makeOceanGeo() {
+  const rings = 150, segs = 176;
+  const pos = [0, 0, 0];
+  const idx = [];
+  for (let i = 1; i <= rings; i++) {
+    const r = 2.2*(Math.pow(1.064, i) - 1);
+    for (let s = 0; s < segs; s++) { const a = s/segs*Math.PI*2; pos.push(Math.cos(a)*r, 0, Math.sin(a)*r); }
+  }
+  for (let s = 0; s < segs; s++) idx.push(0, 1 + (s+1)%segs, 1 + s);
+  for (let i = 1; i < rings; i++) {
+    const a0 = 1 + (i-1)*segs, b0 = 1 + i*segs;
+    for (let s = 0; s < segs; s++) {
+      const s1 = (s+1)%segs;
+      idx.push(a0+s, a0+s1, b0+s, a0+s1, b0+s1, b0+s);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+const oceanUniforms = {
+  uTime: { value: 0 },
+  uW: { value: WAVES.map(w => new THREE.Vector4(w.dx, w.dz, w.k, w.A)) },
+  uQ: { value: WAVES.map(w => w.Q) },
+  uSunDir: { value: SUN_DIR },
+  uFogColor: { value: FOG_COL.clone() },
+  uFogDensity: { value: FOG_DEN },
+  uUnder: { value: 0 },
+  uUWCol: { value: new THREE.Color(0.04, 0.17, 0.19) },
+};
+const ocean = new THREE.Mesh(makeOceanGeo(), new THREE.ShaderMaterial({
+  uniforms: oceanUniforms, side: THREE.DoubleSide, fog: false,
+  vertexShader: `
+    uniform float uTime; uniform vec4 uW[5]; uniform float uQ[5];
+    varying vec3 vW; varying float vFade;
+    void main(){
+      vec4 wp = modelMatrix*vec4(position,1.0);
+      float dist = length(wp.xz - cameraPosition.xz);
+      float fade = 1.0 - smoothstep(2500.0, 9000.0, dist);
+      vec3 p = wp.xyz;
+      for (int i=0;i<5;i++){
+        vec4 w = uW[i]; float c = sqrt(9.81/w.z);
+        float f = w.z*(dot(w.xy, wp.xz) - c*uTime);
+        float A = w.w*fade;
+        p.x += uQ[i]*A*w.x*cos(f); p.z += uQ[i]*A*w.y*cos(f); p.y += A*sin(f);
+      }
+      vW = p; vFade = fade;
+      gl_Position = projectionMatrix*viewMatrix*vec4(p,1.0);
+    }`,
+  fragmentShader: SKY_GLSL + `
+    uniform float uTime; uniform vec4 uW[5]; uniform vec3 uFogColor; uniform float uFogDensity; uniform float uUnder; uniform vec3 uUWCol;
+    varying vec3 vW; varying float vFade;
+    void main(){
+      vec2 xz = vW.xz; float dx = 0.0, dz = 0.0; float distF = length(cameraPosition - vW);
+      for (int i=0;i<5;i++){
+        vec4 w = uW[i]; float c = sqrt(9.81/w.z);
+        float f = w.z*(dot(w.xy, xz) - c*uTime);
+        float Lw = 6.2831/w.z; float A = w.w*vFade*(1.0 - smoothstep(Lw*18.0, Lw*70.0, distF));
+        dx += A*w.z*w.x*cos(f); dz += A*w.z*w.y*cos(f);
+      }
+      float dist = distF;
+      float rf = 1.0 - smoothstep(20.0, 260.0, dist);
+      for (int j=0;j<7;j++){
+        float a = float(j)*2.399 + 0.6; vec2 d = vec2(cos(a), sin(a));
+        float k = 6.2831/(1.3 + float(j)*0.9); float c = sqrt(9.81/k);
+        float f = k*(dot(d, xz) - c*uTime) + float(j)*1.7; float A = 0.025*rf/(1.0+float(j)*0.25);
+        dx += A*k*d.x*cos(f); dz += A*k*d.y*cos(f);
+      }
+      vec3 n = normalize(vec3(-dx, 1.0, -dz));
+      vec3 v = normalize(cameraPosition - vW);
+      if (uUnder > 0.5) {
+        vec3 nn = -n;
+        float ndv = max(dot(nn, v), 0.0);
+        vec3 col = mix(uUWCol*1.6, vec3(0.55,0.72,0.70), pow(ndv, 3.0));
+        float sn = pow(max(dot(refract(-v, nn, 1.33), SUN_DIR_FIX), 0.0), 40.0);
+        col += vec3(0.6,0.7,0.6)*sn;
+        float fogF = 1.0 - exp(-dist*uFogDensity);
+        gl_FragColor = vec4(mix(col, uFogColor, fogF), 1.0);
+        return;
+      }
+      float ndv = max(dot(n, v), 0.0);
+      float fres = 0.02 + 0.98*pow(1.0 - ndv, 5.0);
+      vec3 r = reflect(-v, n); r.y = abs(r.y);
+      vec3 refl = skyCol(r);
+      vec3 deep = vec3(0.035, 0.095, 0.105);
+      vec3 water = deep*(0.65 + 0.35*max(dot(n, uSunDir), 0.0));
+      water += vec3(0.02, 0.075, 0.065)*clamp(vW.y/1.1, 0.0, 1.0);
+      vec3 col = mix(water, refl, clamp(fres, 0.0, 1.0)*0.9);
+      float spec = pow(max(dot(r, uSunDir), 0.0), 500.0)*2.5;
+      col += vec3(1.0, 0.95, 0.85)*spec;
+      float foam = smoothstep(0.55, 1.05, vW.y)*(0.55 + 0.45*sin(xz.x*0.63 + uTime*0.8)*sin(xz.y*0.81 - uTime*0.6));
+      col = mix(col, vec3(0.86,0.9,0.9), clamp(foam,0.0,1.0)*0.45);
+      float fogF = 1.0 - exp(-dist*uFogDensity);
+      gl_FragColor = vec4(mix(col, uFogColor, fogF), 1.0);
+    }`.replace('SUN_DIR_FIX', 'uSunDir'),
+}));
+ocean.frustumCulled = false;
+scene.add(ocean);
+
+const seabed = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000, 1, 1), new THREE.MeshLambertMaterial({ color: 0x4a4a38 }));
+seabed.rotation.x = -Math.PI/2; seabed.position.y = -SEABED;
+scene.add(seabed);
+
+// ---- partícules (esquitxos, fum, escuma, bombolles) ----
+const PMAX = 6000;
+const pPos = new Float32Array(PMAX*3), pSize = new Float32Array(PMAX), pAlpha = new Float32Array(PMAX), pCol = new Float32Array(PMAX*3);
+const pVel = new Float32Array(PMAX*3), pLife = new Float32Array(PMAX), pMaxL = new Float32Array(PMAX), pS0 = new Float32Array(PMAX),
+      pGrow = new Float32Array(PMAX), pA0 = new Float32Array(PMAX), pGrav = new Float32Array(PMAX), pDrag = new Float32Array(PMAX), pFloor = new Float32Array(PMAX);
+let pNext = 0;
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1));
+pGeo.setAttribute('aColor', new THREE.BufferAttribute(pCol, 3));
+const pTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(255,255,255,.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); return t;
+})();
+const pMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { uTex: { value: pTex }, uScale: { value: 500 }, uFogColor: { value: FOG_COL.clone() }, uFogDensity: { value: FOG_DEN } },
+  vertexShader: `attribute float aSize; attribute float aAlpha; attribute vec3 aColor; uniform float uScale; uniform float uFogDensity;
+    varying float vA; varying vec3 vC; varying float vF;
+    void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv;
+      gl_PointSize = aSize*uScale/max(-mv.z, 0.5); vA = aAlpha; vC = aColor; vF = exp(-(-mv.z)*uFogDensity); }`,
+  fragmentShader: `uniform sampler2D uTex; uniform vec3 uFogColor; varying float vA; varying vec3 vC; varying float vF;
+    void main(){ vec4 t = texture2D(uTex, gl_PointCoord); float a = t.a*vA; if (a < 0.01) discard;
+      gl_FragColor = vec4(mix(uFogColor, vC, vF), a); }`,
+});
+const particles = new THREE.Points(pGeo, pMat);
+particles.frustumCulled = false;
+particles.renderOrder = 5;
+scene.add(particles);
+
+function emit(x, y, z, vx, vy, vz, size, grow, life, alpha, r, g, b, grav = 0, drag = 0, floor = -1e9) {
+  const i = pNext; pNext = (pNext + 1) % PMAX;
+  pPos[i*3] = x; pPos[i*3+1] = y; pPos[i*3+2] = z;
+  pVel[i*3] = vx; pVel[i*3+1] = vy; pVel[i*3+2] = vz;
+  pS0[i] = size; pGrow[i] = grow; pMaxL[i] = life; pLife[i] = 0; pA0[i] = alpha;
+  pCol[i*3] = r; pCol[i*3+1] = g; pCol[i*3+2] = b; pGrav[i] = grav; pDrag[i] = drag; pFloor[i] = floor;
+  pSize[i] = size; pAlpha[i] = 0;
+}
+function updParticles(dt) {
+  if (dt <= 0) return;
+  for (let i = 0; i < PMAX; i++) {
+    if (pMaxL[i] <= 0) continue;
+    pLife[i] += dt;
+    const u = pLife[i]/pMaxL[i];
+    if (u >= 1) { pMaxL[i] = 0; pAlpha[i] = 0; continue; }
+    const dr = Math.exp(-pDrag[i]*dt);
+    pVel[i*3] *= dr; pVel[i*3+1] = pVel[i*3+1]*dr - pGrav[i]*dt; pVel[i*3+2] *= dr;
+    pPos[i*3] += pVel[i*3]*dt; pPos[i*3+1] += pVel[i*3+1]*dt; pPos[i*3+2] += pVel[i*3+2]*dt;
+    if (pPos[i*3+1] < pFloor[i]) { pPos[i*3+1] = pFloor[i]; pVel[i*3+1] = 0; pVel[i*3] *= 0.5; pVel[i*3+2] *= 0.5; }
+    pSize[i] = pS0[i] + pGrow[i]*pLife[i];
+    pAlpha[i] = pA0[i]*Math.pow(1 - u, 1.4)*Math.min(1, pLife[i]*5);
+  }
+  pGeo.attributes.position.needsUpdate = true; pGeo.attributes.aSize.needsUpdate = true;
+  pGeo.attributes.aAlpha.needsUpdate = true; pGeo.attributes.aColor.needsUpdate = true;
+}
+const W3 = (x, y) => [x, -y];   // sim → three (x, z)
+
+function sprayColumn(x, y, big = 1) {
+  const [X, Z] = W3(x, y); const h = hAt(x, y);
+  for (let i = 0; i < 140*big; i++) {
+    const a = Math.random()*Math.PI*2, r = Math.random()*6*big;
+    const up = (14 + Math.random()*30)*Math.sqrt(big);
+    emit(X + Math.cos(a)*r, h + Math.random()*2, Z + Math.sin(a)*r,
+      Math.cos(a)*(2+Math.random()*6)*big, up, Math.sin(a)*(2+Math.random()*6)*big,
+      5 + Math.random()*7*big, 3, 3 + Math.random()*3, 0.85, 0.93, 0.95, 0.96, 9.8, 0.3, h - 1);
+  }
+  for (let i = 0; i < 40*big; i++) {
+    const a = Math.random()*Math.PI*2, r = Math.random()*14*big;
+    emit(X + Math.cos(a)*r, h + 0.3, Z + Math.sin(a)*r, Math.cos(a)*3, 0, Math.sin(a)*3, 8*big, 2.5, 25 + Math.random()*20, 0.75, 0.88, 0.92, 0.92, 0, 0.5);
+  }
+}
+function smokeBurst(x, y, h, n = 50) {
+  const [X, Z] = W3(x, y);
+  for (let i = 0; i < n; i++) {
+    emit(X + gauss()*4, h + Math.random()*6, Z + gauss()*4, gauss()*2 + 2.5, 3 + Math.random()*6, gauss()*2,
+      8 + Math.random()*6, 2.2, 20 + Math.random()*20, 0.55, 0.12, 0.12, 0.12, -0.2, 0.15);
+  }
+  for (let i = 0; i < 30; i++) emit(X + gauss()*3, h + 2, Z + gauss()*3, gauss()*8, 8 + Math.random()*15, gauss()*8, 4, 6, 1.2, 0.9, 1.0, 0.65, 0.25, 4, 0.5);
+}
+function bubbles(x, y, depth, n = 60) {
+  const [X, Z] = W3(x, y);
+  for (let i = 0; i < n; i++) emit(X + gauss()*4, -depth + gauss()*3, Z + gauss()*4, gauss()*1.5, 2 + Math.random()*4, gauss()*1.5, 0.8 + Math.random(), 0.5, 6 + Math.random()*6, 0.7, 0.75, 0.9, 0.95, -0.6, 0.3);
+}
+
+/* =========================================================================
+   MODELS 3D
+   ========================================================================= */
+function hullGeometry(L, B, H, draft, o = {}) {
+  const bowLen = o.bowLen ?? 0.2, sternLen = o.sternLen ?? 0.14, transom = o.transom ?? 0.6;
+  const sternPoint = !!o.sternPoint, sheer = o.sheer ?? 0.018;
+  const hullC = o.hull || [0.2, 0.2, 0.2], bootC = o.boot || [0.06, 0.06, 0.06], botC = o.bottom || [0.42, 0.13, 0.10];
+  const prof = [[1, 1, 'h'], [1, 0.18, 'h'], [0.998, 0.15, 'b'], [0.99, 0, 'b'], [0.987, -0.05, 'r'], [0.93, -0.5, 'r'], [0.7, -0.88, 'r'], [0.25, -1, 'r'], [0, -1, 'r']];
+  const P = prof.length, M = 2*P - 1, N = 44;
+  const fb = H - draft;
+  const pos = [], col = [], idx = [], deckL = [], deckR = [];
+  const cmap = { h: hullC, b: bootC, r: botC };
+  for (let s = 0; s <= N; s++) {
+    const t = s/N, z = -L/2 + t*L;
+    let w;
+    if (t < bowLen) { const u = t/bowLen; w = Math.pow(Math.sin(u*Math.PI/2), 0.85); }
+    else if (t > 1 - sternLen) { const u = (t - (1 - sternLen))/sternLen; w = sternPoint ? Math.pow(Math.max(0, Math.cos(Math.min(u, 1)*Math.PI/2)), 0.75) : 1 - (1 - transom)*u*u; }
+    else w = 1;
+    const sh = t < 0.25 ? sheer*L*Math.pow((0.25 - t)/0.25, 2) : (t > 0.85 ? sheer*L*0.4*Math.pow((t - 0.85)/0.15, 2) : 0);
+    const kb = o.keelBow ?? 0.06, ks = o.keelStern ?? 0;
+    let kd = 1; if (t < kb) kd = 0.3 + 0.7*Math.pow(t/kb, 0.7); if (ks && t > 1 - ks) kd = 0.35 + 0.65*Math.pow(Math.max(0, (1 - t)/ks), 0.7);
+    let dm = 1; if (o.deckDrop) { if (t < 0.14) dm = 0.25 + 0.75*(t/0.14); else if (t > 0.86) dm = 0.25 + 0.75*(1 - t)/0.14; }
+    const lowW = t < bowLen ? Math.pow(t/bowLen, 0.6) : (t > 1 - sternLen ? (sternPoint ? 1 : 1 - ((t - (1 - sternLen))/sternLen)*0.55) : 1);
+    for (let k = 0; k < M; k++) {
+      const j = k < P ? k : (M - 1 - k);
+      const side = k < P - 1 ? -1 : (k === P - 1 ? 0 : 1);
+      const [wf, yf, cc] = prof[j];
+      const y = yf >= 0 ? yf*(fb + sh)*dm : yf*draft*kd;
+      const wm = yf < 0 ? w*lowW : w;
+      pos.push(side*wf*(B/2)*wm, y, z);
+      const c = cmap[cc]; col.push(c[0], c[1], c[2]);
+    }
+    deckL.push([pos[(s*M)*3], pos[(s*M)*3+1], z]);
+    deckR.push([pos[(s*M + M - 1)*3], pos[(s*M + M - 1)*3+1], z]);
+  }
+  for (let s = 0; s < N; s++) for (let k = 0; k < M - 1; k++) {
+    const a = s*M + k, b = (s+1)*M + k, c = (s+1)*M + k + 1, d = s*M + k + 1;
+    idx.push(a, b, d, b, c, d);
+  }
+  if (!sternPoint) {
+    const ci = pos.length/3; let yc = 0;
+    for (let k = 0; k < M; k++) yc += pos[(N*M + k)*3 + 1];
+    pos.push(0, yc/M, L/2); col.push(...hullC);
+    for (let k = 0; k < M - 1; k++) idx.push(ci, N*M + k, N*M + k + 1);
+    idx.push(ci, N*M + M - 1, N*M);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  // coberta
+  const dp = [], di = [];
+  for (let s = 0; s <= N; s++) { dp.push(...deckL[s], ...deckR[s]); }
+  for (let s = 0; s < N; s++) { const a = s*2; di.push(a, a+2, a+1, a+1, a+2, a+3); }
+  if (!sternPoint) { const c = dp.length/3; dp.push(0, deckL[N][1], L/2); di.push(c, N*2, N*2+1); }
+  const dg = new THREE.BufferGeometry();
+  dg.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3));
+  dg.setIndex(di); dg.computeVertexNormals();
+  return { hull: g, deck: dg, deckY: fb };
+}
+
+const CLASSES = {
+  merchant: {
+    name: 'Mercant mitjà', grt: '5.200 TRB', L: 125, B: 17, H: 11, draft: 7.5, mast: 26, maxKn: 11, hp: 1.9, noise: 1.0,
+    hull: [0.17, 0.17, 0.17], sup: [0.72, 0.70, 0.64], deckCol: 0x5a4a38,
+    sonar: 'hèlix lenta i pesant, vaixell mercant gran',
+    parts: [
+      { t: 'box', z: -0.445, len: 13, w: 0.86, y0: 0, h: 2.4, c: 'hull' },
+      { t: 'box', z: -0.22, len: 9, w: 7.5, y0: 0, h: 1.3, c: 'hatch' },
+      { t: 'box', z: -0.34, len: 9, w: 7.5, y0: 0, h: 1.3, c: 'hatch' },
+      { t: 'box', z: -0.035, len: 16, w: 13, y0: 0, h: 5 },
+      { t: 'box', z: -0.05, len: 9, w: 11, y0: 5, h: 2.8 },
+      { t: 'box', z: -0.065, len: 3, w: 15.5, y0: 7.3, h: 0.6 },
+      { t: 'box', z: 0.2, len: 9, w: 7.5, y0: 0, h: 1.3, c: 'hatch' },
+      { t: 'box', z: 0.32, len: 9, w: 7.5, y0: 0, h: 1.3, c: 'hatch' },
+      { t: 'box', z: 0.445, len: 13, w: 0.86, y0: 0, h: 2.4, c: 'hull' },
+      { t: 'funnel', z: 0.035, r: 2.2, y0: 4, h: 8.5, band: [0.6, 0.12, 0.08] },
+      { t: 'mast', z: -0.28, top: 26 }, { t: 'mast', z: 0.27, top: 24 },
+    ],
+  },
+  tanker: {
+    name: 'Petrolier', grt: '8.000 TRB', L: 140, B: 19, H: 11, draft: 8.5, mast: 24, maxKn: 12, hp: 1.6, noise: 1.1,
+    hull: [0.24, 0.23, 0.22], sup: [0.78, 0.76, 0.70], deckCol: 0x4f4a44,
+    sonar: 'hèlix lenta, vaixell gran (petrolier)',
+    parts: [
+      { t: 'box', z: -0.46, len: 12, w: 0.84, y0: 0, h: 2.6, c: 'hull' },
+      { t: 'box', z: -0.13, len: 12, w: 14, y0: 0, h: 5 },
+      { t: 'box', z: -0.13, len: 7, w: 10, y0: 5, h: 2.6 },
+      { t: 'box', z: 0.02, len: 70, w: 1.2, y0: 2.2, h: 0.5, c: 'hull' },
+      { t: 'box', z: 0.40, len: 22, w: 16.5, y0: 0, h: 5 },
+      { t: 'box', z: 0.40, len: 10, w: 11, y0: 5, h: 2.4 },
+      { t: 'funnel', z: 0.43, r: 2.4, y0: 6, h: 7.5, band: [0.15, 0.25, 0.55] },
+      { t: 'mast', z: -0.38, top: 24 }, { t: 'mast', z: 0.15, top: 20 },
+    ],
+  },
+  coaster: {
+    name: 'Vaixell costaner', grt: '1.600 TRB', L: 76, B: 11, H: 7, draft: 4.8, mast: 18, maxKn: 9, hp: 1.0, noise: 0.7,
+    hull: [0.22, 0.20, 0.17], sup: [0.70, 0.66, 0.58], deckCol: 0x5a4a38,
+    sonar: 'hèlix lenta, vaixell petit',
+    parts: [
+      { t: 'box', z: -0.44, len: 8, w: 0.86, y0: 0, h: 2, c: 'hull' },
+      { t: 'box', z: -0.12, len: 14, w: 6.5, y0: 0, h: 1.2, c: 'hatch' },
+      { t: 'box', z: 0.34, len: 15, w: 9, y0: 0, h: 3.2 },
+      { t: 'box', z: 0.29, len: 7, w: 8, y0: 3.2, h: 2.6 },
+      { t: 'funnel', z: 0.40, r: 1.3, y0: 3.2, h: 5, band: [0.1, 0.1, 0.1] },
+      { t: 'mast', z: -0.24, top: 18 }, { t: 'mast', z: 0.12, top: 15 },
+    ],
+  },
+  torpedoboat: {
+    name: 'Torpediner Tipus 35', grt: '844 t', L: 84, B: 8.6, H: 5.5, draft: 2.8, mast: 17, maxKn: 35, hp: 0.9, noise: 1.6,
+    hull: [0.47, 0.50, 0.52], sup: [0.53, 0.56, 0.58], deckCol: 0x55595c, bottom: [0.47, 0.50, 0.52], boot: [0.12, 0.12, 0.12],
+    sonar: 'turbines d\'alta velocitat, vaixell de guerra',
+    parts: [
+      { t: 'box', z: -0.36, len: 2.5, w: 2.4, y0: 0, h: 1.6 },
+      { t: 'box', z: -0.20, len: 9, w: 6, y0: 0, h: 3.4 },
+      { t: 'box', z: -0.22, len: 5, w: 5, y0: 3.4, h: 2.2 },
+      { t: 'funnel', z: -0.02, r: 1.3, y0: 0, h: 6.5, band: [0.1, 0.1, 0.1] },
+      { t: 'box', z: 0.14, len: 7, w: 2.2, y0: 0, h: 1.1 },
+      { t: 'box', z: 0.34, len: 2.6, w: 2.4, y0: 0, h: 1.6 },
+      { t: 'mast', z: -0.11, top: 17 },
+    ],
+  },
+};
+
+const matCache = {};
+const lam = (c) => { const k = Array.isArray(c) ? c.join(',') : String(c); if (!matCache[k]) matCache[k] = new THREE.MeshLambertMaterial({ color: Array.isArray(c) ? new THREE.Color(c[0], c[1], c[2]) : c }); return matCache[k]; };
+
+function buildShipMesh(C) {
+  const g = new THREE.Group();
+  const hg = hullGeometry(C.L, C.B, C.H, C.draft, { hull: C.hull, bottom: C.bottom, boot: C.boot, bowLen: C === CLASSES.torpedoboat ? 0.3 : 0.2, transom: C === CLASSES.torpedoboat ? 0.7 : 0.6 });
+  g.add(new THREE.Mesh(hg.hull, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  g.add(new THREE.Mesh(hg.deck, lam(C.deckCol)));
+  const deckY = hg.deckY;
+  for (const p of C.parts) {
+    if (p.t === 'box') {
+      const w = p.w <= 1 ? p.w*C.B : p.w;
+      const col = p.c === 'hull' ? C.hull : p.c === 'hatch' ? [0.3, 0.27, 0.22] : C.sup;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, p.h, p.len), lam(col));
+      m.position.set(0, deckY + p.y0 + p.h/2, p.z*C.L); g.add(m);
+    } else if (p.t === 'funnel') {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(p.r*0.92, p.r, p.h, 16), lam([0.12, 0.12, 0.12]));
+      m.position.set(0, deckY + p.y0 + p.h/2, p.z*C.L); m.scale.z = 1.25; g.add(m);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(p.r*0.94, p.r*0.95, p.h*0.18, 16), lam(p.band));
+      b.position.set(0, deckY + p.y0 + p.h*0.7, p.z*C.L); b.scale.z = 1.26; g.add(b);
+      g.userData.funnel = new THREE.Vector3(0, deckY + p.y0 + p.h, p.z*C.L);
+    } else if (p.t === 'mast') {
+      const hgt = p.top - deckY;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.32, hgt, 6), lam([0.25, 0.22, 0.2]));
+      m.position.set(0, deckY + hgt/2, p.z*C.L); g.add(m);
+      const y = new THREE.Mesh(new THREE.BoxGeometry(C.B*0.55, 0.2, 0.2), lam([0.25, 0.22, 0.2]));
+      y.position.set(0, p.top - 3.5, p.z*C.L); g.add(y);
+    }
+  }
+  return g;
+}
+
+function buildSubMesh() {
+  const g = new THREE.Group();
+  const grey = [0.40, 0.43, 0.45], dark = [0.26, 0.28, 0.30];
+  const hg = hullGeometry(67, 6.2, 6.0, SURF, { hull: grey, boot: dark, bottom: dark, sternPoint: true, bowLen: 0.28, sternLen: 0.34, sheer: 0.004, keelBow: 0.22, keelStern: 0.3, deckDrop: true });
+  g.add(new THREE.Mesh(hg.hull, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  g.add(new THREE.Mesh(hg.deck, lam([0.33, 0.31, 0.28])));
+  const deckY = hg.deckY; // 1.3
+  // torre (oberta per dalt)
+  const twr = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.08, 3.7, 24, 1, true), new THREE.MeshLambertMaterial({ color: new THREE.Color(...grey), side: THREE.DoubleSide }));
+  twr.scale.set(1.45, 1, 3.1); twr.position.set(0, deckY + 1.85, -2); g.add(twr);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(1, 24), lam([0.2, 0.2, 0.2]));
+  floor.rotation.x = -Math.PI/2; floor.scale.set(1.4, 3.0, 1); floor.position.set(0, deckY + 2.55, -2); g.add(floor);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 6, 30), lam(grey));
+  rim.rotation.x = Math.PI/2; rim.scale.set(1.45, 3.1, 1); rim.position.set(0, deckY + 3.7, -2); g.add(rim);
+  const wg = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.25, 3), lam(grey)); wg.position.set(0, deckY + 2.4, 2.8); g.add(wg);
+  // canó de coberta 88 mm
+  const gb = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 1.0, 10), lam(dark)); gb.position.set(0, deckY + 0.5, -12); g.add(gb);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 4.6, 8), lam(dark));
+  barrel.rotation.x = Math.PI/2 - 0.08; barrel.position.set(0, deckY + 1.2, -14); g.add(barrel);
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 0.7), lam(dark)); shield.position.set(0, deckY + 1.15, -12); g.add(shield);
+  // periscopis i suports
+  const sup = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 2.2, 8), lam(dark)); sup.position.set(0, deckY + 4.4, -0.9); g.add(sup);
+  const peri = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 6, 8), lam([0.15, 0.15, 0.15]));
+  peri.position.set(0, deckY + 3.6, -0.9); g.add(peri);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.28, 0.24), lam([0.1, 0.1, 0.1])); g.add(head);
+  g.userData.peri = peri; g.userData.head = head; g.userData.deckY = deckY;
+  // filferro antixarxes
+  const wireMat = new THREE.LineBasicMaterial({ color: 0x333333 });
+  const wpts = [new THREE.Vector3(0, deckY + 0.3, -33), new THREE.Vector3(0, deckY + 3.7, -5), new THREE.Vector3(0, deckY + 3.7, 1), new THREE.Vector3(0, deckY + 0.3, 31)];
+  g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(wpts), wireMat));
+  // hèlixs
+  for (const sx of [-1.2, 1.2]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.15, 3), lam([0.45, 0.35, 0.2])); p.rotation.x = Math.PI/2; p.position.set(sx, -2.6, 31.5); g.add(p); }
+  // timons de profunditat
+  for (const z of [-27, 30]) { const pl = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.12, 1.4), lam(dark)); pl.position.set(0, z < 0 ? -0.6 : -2.4, z); g.add(pl); }
+  return g;
+}
+
+const subMesh = buildSubMesh();
+scene.add(subMesh);
+
+const torpGeo = new THREE.CylinderGeometry(0.27, 0.27, 7.2, 10); torpGeo.rotateX(Math.PI/2);
+const torpMat = lam([0.2, 0.22, 0.2]);
+const dcGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.7, 8);
+
+/* =========================================================================
+   ENTITATS
+   ========================================================================= */
+const ships = [];
+const torps = [];
+const charges = [];
+let pendingLaunch = [];
+let entId = 1;
+
+function makeShip(cls, name, x, y, hdg, kn, ai = null) {
+  const C = CLASSES[cls];
+  const mesh = buildShipMesh(C); scene.add(mesh);
+  const s = {
+    id: entId++, cls, C, name, x, y, hdg, ordHdg: hdg, v: kn*KN, ordKn: kn, flood: 0, sinking: false, sinkT: 0, sunk: false,
+    sinkY: 0, trim: 0, list: 0, smokeT: Math.random(), wakeT: 0, mesh, known: null, spotted: false, ai, heard: false,
+    trimDir: Math.random() < 0.5 ? 1 : -1, hits: 0, rollPh: Math.random()*6,
+  };
+  ships.push(s);
+  return s;
+}
+
+/* =========================================================================
+   TDC (Vorhaltrechner)
+   ========================================================================= */
+const tdc = {
+  valid: false, x: 0, y: 0, t: 0, course: 0, speed: 0, lock: null, marks: [],
+  depth: 3, pistol: 'contact', g7aSpeed: 44, salvo: 1, spread: 2, idClass: null,
+};
+function tdcNow() {
+  if (!tdc.valid) return null;
+  const dt = simT - tdc.t, v = tdc.speed*KN, d = dirv(tdc.course);
+  return { x: tdc.x + d.x*v*dt, y: tdc.y + d.y*v*dt, vx: d.x*v, vy: d.y*v };
+}
+function tdcBR() {
+  const p = tdcNow(); if (!p) return null;
+  return { brg: brgTo(sub.x, sub.y, p.x, p.y), rng: Math.hypot(p.x - sub.x, p.y - sub.y), p };
+}
+function tdcSetBR(brg, rng) {
+  const d = dirv(brg);
+  tdc.x = sub.x + d.x*rng; tdc.y = sub.y + d.y*rng; tdc.t = simT; tdc.valid = true;
+}
+function tdcAoB() {
+  const br = tdcBR(); if (!br) return null;
+  return angDiff(norm360(br.brg + 180), tdc.course); // + estribord, − babord
+}
+function tdcSetAoB(a) {
+  const br = tdcBR(); if (!br) return;
+  const p = br.p; tdc.x = p.x; tdc.y = p.y; tdc.t = simT;
+  tdc.course = norm360(br.brg + 180 - a);
+}
+function torpSpec(type) {
+  if (type === 'G7e') return { v: 30*KN, kn: 30, range: 5000 };
+  const kn = tdc.g7aSpeed; return { v: kn*KN, kn, range: TORP.G7a.speeds[kn] };
+}
+const T_STRAIGHT = 15, T_RADIUS = 95;
+function solveFiring(tube, type, extraGyro = 0) {
+  const stern = tube.stern;
+  const base = norm360(sub.hdg + (stern ? 180 : 0));
+  const bd = dirv(base);
+  const L = { x: sub.x + bd.x*30, y: sub.y + bd.y*30 };
+  const spec = torpSpec(type);
+  const tgt = tdcNow();
+  if (!tgt) return { gyro: extraGyro, ok: false, reason: 'Sense dades del blanc', spec, base };
+  let course = brgTo(L.x, L.y, tgt.x, tgt.y), P2 = null, t1 = 0, tau = 0, aim = null;
+  for (let it = 0; it < 10; it++) {
+    const delta = angDiff(course, base);
+    const P1 = { x: L.x + bd.x*T_STRAIGHT, y: L.y + bd.y*T_STRAIGHT };
+    if (Math.abs(delta) < 0.01) { P2 = P1; t1 = T_STRAIGHT/spec.v; }
+    else {
+      const s = Math.sign(delta);
+      const cd = dirv(base + 90*s); const C = { x: P1.x + cd.x*T_RADIUS, y: P1.y + cd.y*T_RADIUS };
+      const ed = dirv(base + delta - 90*s); P2 = { x: C.x + ed.x*T_RADIUS, y: C.y + ed.y*T_RADIUS };
+      t1 = (T_STRAIGHT + T_RADIUS*Math.abs(delta)*D2R)/spec.v;
+    }
+    const Dx = tgt.x + tgt.vx*t1 - P2.x, Dy = tgt.y + tgt.vy*t1 - P2.y;
+    const a = tgt.vx*tgt.vx + tgt.vy*tgt.vy - spec.v*spec.v, b = 2*(Dx*tgt.vx + Dy*tgt.vy), c = Dx*Dx + Dy*Dy;
+    const disc = b*b - 4*a*c;
+    if (disc < 0) return { ok: false, reason: 'Sense intercepció', spec, base, gyro: 0 };
+    const r1 = (-b + Math.sqrt(disc))/(2*a), r2 = (-b - Math.sqrt(disc))/(2*a);
+    tau = Math.max(r1, r2); if (tau < 0) return { ok: false, reason: 'Sense intercepció', spec, base, gyro: 0 };
+    aim = { x: tgt.x + tgt.vx*(t1 + tau), y: tgt.y + tgt.vy*(t1 + tau) };
+    course = brgTo(P2.x, P2.y, aim.x, aim.y);
+  }
+  const gyro = angDiff(course, base) + extraGyro;
+  const runDist = spec.v*(t1 + tau);
+  let ok = true, reason = 'Solució correcta';
+  if (Math.abs(gyro) > 90) { ok = false; reason = 'Angle giroscòpic fora de límit (±90°)'; }
+  else if (runDist > spec.range) { ok = false; reason = 'Fora de l\'abast del torpede'; }
+  else if (runDist < 300) { reason = 'Massa a prop: el torpede no s\'armarà (<300 m)'; }
+  return { ok, reason, gyro, runDist, runTime: t1 + tau, aim, base, spec, course };
+}
+
+/* =========================================================================
+   MISSATGES I MISSIÓ
+   ========================================================================= */
+const msgs = [];
+function clockStr(t = simT) { const s = Math.floor(START_CLOCK + t); return `${String(Math.floor(s/3600)%24).padStart(2,'0')}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function msg(t, cls = '', slow = false) {
+  msgs.push({ t, cls, ts: clockStr() });
+  if (msgs.length > 8) msgs.shift();
+  $('msgBox').innerHTML = msgs.map(m => `<div class="msg ${m.cls}"><span class="ts">${m.ts}</span>${m.t}</div>`).join('');
+  if (slow) setTC(0);
+}
+function setTC(i) { tcIdx = clamp(i, 0, TC_STEPS.length - 1); $('tc').textContent = '×' + TC_STEPS[tcIdx]; }
+
+const WP_A = { x: 3000, y: 0, name: 'A' };
+const BASE = { x: 0, y: 0, name: 'H' };
+const M = {
+  stage: 0, t0: 0, score: 0, fired: 0, hits: 0, sunk: 0, dcLethal: 0, dcNear: 0, results: [], ended: false,
+  hulk: null, wotan: null, escort: null, diveStart: null, diveTime: null, sub2: 'a', hulkTorps: 0,
+};
+const STAGES = [
+  {
+    title: 'Navegació en superfície',
+    hint: () => `Ordeneu rumb 090° (A/D o els botons) i avant tota (W). Navegueu fins al punt A, ${(dist(sub, WP_A)/1000).toFixed(1)} km. Podeu accelerar el temps amb +.\nEl dièsel carrega les bateries mentre navegueu en superfície.`,
+    start() { msg('Flotilla: Comenceu l\'exercici. Navegueu en superfície fins al punt A.', 'radio'); },
+    update() { if (dist(sub, WP_A) < 500) return 'done'; },
+  },
+  {
+    title: 'Immersió d\'alarma',
+    hint: () => M.sub2 === 'a'
+      ? 'ALARM! Premeu C per a una immersió ràpida fins a 40 m. Objectiu: superar els 30 m tan de pressa com pugueu (els bons comandants ho fan en menys de 40 s).'
+      : 'Ara pugeu a cota periscòpica (G, 13 m) i alceu el periscopi (U). Mireu-hi amb P.',
+    start() { M.sub2 = 'a'; msg('Flotilla: Punt A assolit. Executeu una immersió d\'alarma!', 'radio', true); },
+    update() {
+      if (M.sub2 === 'a') {
+        if (M.diveStart === null && sub.ordDepth > SURF + 1) M.diveStart = simT;
+        if (sub.depth >= 30) { M.diveTime = M.diveStart !== null ? simT - M.diveStart : null; M.sub2 = 'b';
+          msg(`Cota 30 m assolida${M.diveTime ? ` en ${Math.round(M.diveTime)} s` : ''}. Ara, cota periscòpica.`, 'good', true); }
+      } else if (sub.depth <= 14.5 && sub.peri > 0.95 && periHead().above) return 'done';
+    },
+  },
+  {
+    title: 'Atac al buc-blanc HANSA',
+    hint: () => `El vell petrolier HANSA (pal 24 m) és fondejat a ~${(dist(sub, M.hulk)/1000).toFixed(1)} km, demora ${f3(brgTo(sub.x, sub.y, M.hulk.x, M.hulk.y))}°. Enfonseu-lo.\n1) P: periscopi, gireu-lo cap al blanc.\n2) I: identifiqueu-lo (Petrolier).\n3) X: estadímetre, roda del ratolí fins a la punta del pal, Enter.\n4) És immòbil: al TDC (T) poseu velocitat 0.\n5) Acosteu-vos a <1500 m i dispareu (Enter). Prova l'espoleta magnètica a 1–2 m per sota del calat (8,5 m).`,
+    start() { msg('Flotilla: Ataqueu el buc-blanc HANSA. Foc real autoritzat.', 'radio', true); },
+    update() { if (M.hulk.sinking || M.hulk.sunk) return 'done'; },
+  },
+  {
+    title: 'Atac al mercant WOTAN (en moviment)',
+    hint: () => {
+      if (!M.wotan) return '';
+      const d = dist(sub, M.wotan);
+      return `El mercant WOTAN (Mercant mitjà, pal 26 m) navega a velocitat desconeguda. Ara a ~${(d/1000).toFixed(1)} km, demora ${f3(brgTo(sub.x, sub.y, M.wotan.x, M.wotan.y))}°.\nPreneu dues marques amb l'estadímetre (X → Enter) separades com a mínim 60 s: el TDC calcularà rumb i velocitat. Situeu-vos davant del seu rumb, amb AoB 60–100° i distància <1500 m. Cal com a mínim un impacte.`;
+    },
+    start() {
+      const h = sub.hdg;
+      const P = { x: sub.x + dirv(h).x*1300, y: sub.y + dirv(h).y*1300 };
+      const sp = dirv(h + 45); const S = { x: sub.x + sp.x*5200, y: sub.y + sp.y*5200 };
+      M.wotan = makeShip('merchant', 'WOTAN', S.x, S.y, brgTo(S.x, S.y, P.x, P.y), 8);
+      M.wotanT = simT;
+      msg('Flotilla: El blanc mòbil WOTAN entra a la zona d\'exercici pel vostre sector de proa estribord.', 'radio', true);
+    },
+    update() {
+      if (M.wotan.hits > 0) return 'done';
+      if (simT - M.wotanT > 45*60 || (dist(sub, M.wotan) > 11000)) return 'fail';
+    },
+  },
+  {
+    title: 'Evasió: atac ASW del torpediner T 11',
+    hint: () => {
+      const left = Math.max(0, 7*60 - (simT - M.t0));
+      return `El torpediner T 11 farà un atac amb càrregues de profunditat d'exercici. Resistiu ${fmtTime(left)} sense cap impacte simulat (<20 m).\nBaixeu per sota de la termoclina (${LAYER} m), avant lenta o marxa silenciosa (Q). Escolteu l'hidròfon (H): quan les hèlixs acceleren, el torpediner comença la passada d'atac: canvieu de rumb i de cota.\nNo emergiu ni alceu el periscopi a prop seu.`;
+    },
+    start() {
+      const sp = dirv(sub.hdg + 130); const S = { x: sub.x + sp.x*3800, y: sub.y + sp.y*3800 };
+      M.escort = makeShip('torpedoboat', 'T 11', S.x, S.y, brgTo(S.x, S.y, sub.x, sub.y), 22, {
+        mode: 'approach', known: { x: sub.x + gauss()*300, y: sub.y + gauss()*300, t: simT, depth: 50 }, checkT: 2, pingT: 3, dropN: 0, dropT: 0, runT: 0, circleT: 0,
+      });
+      msg('Flotilla: Inici de l\'exercici antisubmarí. El T 11 us busca. Fins ara heu estat localitzats aproximadament.', 'radio', true);
+    },
+    update() {
+      if (simT - M.t0 > 7*60) {
+        M.escort.ai.mode = 'leave';
+        return M.dcLethal > 0 ? 'fail' : 'done';
+      }
+    },
+  },
+  {
+    title: 'Retorn a la base (punt H)',
+    hint: () => `Emergiu (N) i navegueu fins al punt H, a ${(dist(sub, BASE)/1000).toFixed(1)} km, demora ${f3(brgTo(sub.x, sub.y, BASE.x, BASE.y))}°. Podeu usar la carta (M) amb clic dret per posar rumb.`,
+    start() { msg('Flotilla: Final de l\'exercici. Torneu a la base en superfície.', 'radio', true); },
+    update() { if (dist(sub, BASE) < 600 && sub.depth <= SURF + 0.5) return 'done'; },
+  },
+];
+function stageStart(i) {
+  M.stage = i; M.t0 = simT;
+  if (i >= STAGES.length) { endMission(true); return; }
+  STAGES[i].start();
+  renderObjectives();
+}
+function missionUpdate() {
+  if (M.ended) return;
+  const st = STAGES[M.stage]; if (!st) return;
+  const r = st.update();
+  if (r) {
+    M.results[M.stage] = r;
+    if (r === 'done') { AudioSys.click(); msg(`✔ Objectiu complert: ${st.title}`, 'good', true); }
+    else msg(`✘ Objectiu no superat: ${st.title}`, 'warn', true);
+    stageStart(M.stage + 1);
+  }
+}
+function renderObjectives() {
+  $('objList').innerHTML = STAGES.map((s, i) => {
+    const r = M.results[i];
+    const cls = r === 'done' ? 'done' : r === 'fail' ? 'fail' : i === M.stage ? 'cur' : '';
+    const ic = r === 'done' ? '✔' : r === 'fail' ? '✘' : i === M.stage ? '▶' : '·';
+    return `<li class="${cls}">${ic} ${i+1}. ${s.title}</li>`;
+  }).join('');
+}
+
+function endMission(ok, reason = '') {
+  if (M.ended) return;
+  M.ended = true; paused = true;
+  let pts = 0;
+  const pr = [10, 10, 20, 30, 20, 10];
+  M.results.forEach((r, i) => { if (r === 'done') pts += pr[i]; });
+  if (M.diveTime && M.diveTime < 40) pts += 5;
+  if (M.wotan && (M.wotan.sinking || M.wotan.sunk)) pts += 10;
+  pts -= Math.max(0, M.fired - 5)*3;
+  pts -= M.dcNear*2;
+  pts = clamp(Math.round(pts), 0, 115);
+  let grade = pts >= 95 ? 'EXCEL·LENT' : pts >= 75 ? 'BO' : pts >= 55 ? 'SUFICIENT' : 'INSUFICIENT';
+  if (!ok) grade = 'MISSIÓ FALLIDA';
+  const rows = STAGES.map((s, i) => `<tr><td>${i+1}. ${s.title}</td><td>${M.results[i] === 'done' ? '✔ superat' : M.results[i] === 'fail' ? '✘ no superat' : '— no realitzat'}</td></tr>`).join('');
+  $('debriefCard').innerHTML = `
+    <h1>${ok ? 'INFORME DE L\'EXERCICI' : 'U-BOOT PERDUT'}</h1>
+    <h2>${reason || '25a Flotilla d\'Instrucció — Avaluació del comandant'}</h2>
+    <div class="grade">${grade} · ${pts} punts</div>
+    <h3>Objectius</h3><table>${rows}</table>
+    <h3>Estadístiques</h3>
+    <table>
+      <tr><td>Durada</td><td>${fmtTime(simT)}</td></tr>
+      <tr><td>Temps d'immersió d'alarma (0→30 m)</td><td>${M.diveTime ? Math.round(M.diveTime) + ' s' : '—'}</td></tr>
+      <tr><td>Torpedes disparats</td><td>${M.fired}</td></tr>
+      <tr><td>Impactes</td><td>${M.hits}</td></tr>
+      <tr><td>Vaixells enfonsats</td><td>${M.sunk}</td></tr>
+      <tr><td>Càrregues properes (&lt;50 m) / impactes simulats</td><td>${M.dcNear} / ${M.dcLethal}</td></tr>
+      <tr><td>Estat del buc</td><td>${Math.round(sub.hull)} %</td></tr>
+    </table>
+    <button class="go" onclick="location.reload()">Repetir la missió</button>`;
+  $('debrief').classList.remove('hidden');
+}
+
+/* =========================================================================
+   SUBMARÍ: física
+   ========================================================================= */
+function subNoise() {
+  const kn = Math.abs(sub.v)/KN, surf = sub.depth <= SURF + 0.6;
+  let n = 0.12 + 0.11*kn + (surf && sub.diesel ? 1.2 : 0) + (Math.abs(sub.vz) > 0.6 ? 0.15 : 0);
+  if (sub.silent) n *= 0.55;
+  return n;
+}
+function periHead() {
+  const gy = SURF - sub.depth + sub.bob;
+  const y = gy + 3.6 + 2.0 + sub.peri*4.9;
+  const d = dirv(sub.hdg);
+  const x = sub.x + d.x*0.9, yy = sub.y + d.y*0.9;
+  const wh = hAt(x, yy);
+  return { x, y: yy, h: y, above: y > wh + 0.15 && sub.peri > 0.9, wave: wh };
+}
+
+function updateSub(dt) {
+  const surfacedNow = sub.depth <= SURF + 0.4;
+  const wantDive = sub.ordDepth > SURF + 0.4;
+  // dièsel / motors elèctrics
+  if (surfacedNow && !wantDive) {
+    if (!sub.diesel) { sub.dieselDelay += dt; if (sub.dieselDelay > 8) { sub.diesel = true; msg('Dièsels engegats.'); } }
+  } else { if (sub.diesel) { sub.diesel = false; sub.dieselDelay = 0; } }
+  // velocitat
+  let tk = sub.diesel ? TELE[sub.tele].s : TELE[sub.tele].e;
+  if (!sub.diesel && surfacedNow && !wantDive) tk = TELE[sub.tele].e;
+  if (sub.silent) tk = clamp(tk, -2, 3);
+  if (!sub.diesel && sub.battery <= 0) tk = 0;
+  if (sub.bottomed) tk = 0;
+  const tau = sub.diesel ? 45 : 32;
+  sub.v += (tk*KN - sub.v)*(1 - Math.exp(-dt/tau));
+  // timó (el timoner segueix el rumb ordenat)
+  const err = angDiff(sub.ordHdg, sub.hdg);
+  const rt = clamp(err*2.2, -30, 30) * (sub.v < 0 ? -1 : 1);
+  sub.rudder += clamp(rt - sub.rudder, -6*dt, 6*dt);
+  const turn = (sub.v/190)*(sub.rudder/30)*R2D;
+  sub.hdg = norm360(sub.hdg + turn*dt);
+  const d = dirv(sub.hdg);
+  sub.x += d.x*sub.v*dt; sub.y += d.y*sub.v*dt;
+  // cota
+  const kn = Math.abs(sub.v)/KN;
+  if (wantDive && surfacedNow) {
+    const need = sub.alarm ? 6 : 14;
+    if (sub.floodT === 0) msg(sub.alarm ? 'Fluten! Inundant llasts…' : 'Obrint purgues, inundant llasts…');
+    sub.floodT += dt;
+    if (sub.floodT < need) { sub.vz += (0.05 - sub.vz)*(1 - Math.exp(-dt/3)); }
+  } else if (!wantDive) sub.floodT = 0;
+  const flooding = wantDive && surfacedNow && sub.floodT < (sub.alarm ? 6 : 14);
+  if (!flooding) {
+    const blowing = sub.ordDepth <= SURF + 0.4;
+    const maxDown = 0.2 + 0.065*kn + (sub.alarm ? 0.55 : 0);
+    const maxUp = 0.22 + 0.06*kn + (blowing ? 0.45 : 0);
+    const vzT = clamp((sub.ordDepth - sub.depth)*0.12, -maxUp, maxDown);
+    sub.vz += (vzT - sub.vz)*(1 - Math.exp(-dt/4));
+  }
+  const prevDepth = sub.depth;
+  sub.depth += sub.vz*dt;
+  if (sub.depth < SURF) { sub.depth = SURF; if (sub.vz < 0) sub.vz = 0; if (prevDepth > SURF + 0.4) msg('Hem emergit! Obrint la torreta.'); }
+  if (sub.depth >= SEABED - 0.5) {
+    sub.depth = SEABED - 0.5;
+    if (!sub.bottomed) { msg('Toquem fons!', 'warn', true); if (sub.vz > 0.5) sub.hull -= sub.vz*6; AudioSys.boom(0.4, true); shake = Math.max(shake, 0.6); }
+    sub.bottomed = true; sub.vz = Math.min(0, sub.vz);
+  } else if (sub.depth < SEABED - 2) sub.bottomed = false;
+  if (sub.alarm && Math.abs(sub.ordDepth - sub.depth) < 3) { sub.alarm = false; msg(`Cota ${Math.round(sub.ordDepth)} m. Immersió completada.`); }
+  // pressió
+  if (sub.depth > 220) {
+    sub.hull -= (sub.depth - 220)*0.05*dt;
+    sub.creakT -= dt*3;
+  }
+  if (sub.depth > 140) { sub.creakT -= dt; if (sub.creakT < 0) { sub.creakT = 6 + Math.random()*12; AudioSys.creak(); } }
+  // bateries i aire
+  if (!sub.diesel) {
+    sub.battery = Math.max(0, sub.battery - (0.4 + 0.15*Math.pow(kn, 2.8))/3600*dt);
+    if (sub.battery <= 0 && !sub.batWarn) { sub.batWarn = true; msg('Bateries esgotades!', 'warn', true); }
+  } else if (sub.tele <= 5) { sub.battery = Math.min(100, sub.battery + 9/3600*dt); sub.batWarn = false; }
+  if (surfacedNow && !wantDive) sub.air = Math.min(100, sub.air + 20/60*dt);
+  else sub.air = Math.max(0, sub.air - 100/(40*3600)*dt);
+  // periscopi
+  if (sub.periUp) sub.peri = Math.min(1, sub.peri + dt/5); else sub.peri = Math.max(0, sub.peri - dt/4);
+  // traçat
+  sub.trackT -= dt;
+  if (sub.trackT <= 0) { sub.trackT = 10; sub.track.push({ x: sub.x, y: sub.y }); if (sub.track.length > 2000) sub.track.shift(); }
+  // recàrrega de tubs
+  for (const which of ['Bow', 'Stern']) {
+    const key = 'reload' + which, res = which === 'Bow' ? sub.reserveBow : sub.reserveStern;
+    if (sub[key]) {
+      sub[key].t += dt;
+      if (sub[key].t >= RELOAD_TIME) { const tb = sub.tubes[sub[key].tube]; tb.type = sub[key].type; msg(`Tub ${tb.id} recarregat (${tb.type}).`); sub[key] = null; }
+    } else {
+      const empty = sub.tubes.findIndex(t => t.stern === (which === 'Stern') && !t.type);
+      if (empty >= 0 && res.length) sub[key] = { tube: empty, t: 0, type: res.shift() };
+    }
+  }
+  if (sub.hull <= 0 && !sub.lost) { sub.lost = true; sub.hull = 0; AudioSys.boom(1.2, true); endMission(false, 'El buc ha cedit. El submarí s\'ha perdut amb tota la tripulació.'); }
+}
+
+/* =========================================================================
+   TORPEDES
+   ========================================================================= */
+function fireCommand() {
+  if (M.ended) return;
+  if (sub.depth > 25) { msg('Massa profund per disparar (màx. 25 m).', 'warn'); return; }
+  const n = tdc.salvo;
+  let chosen = [];
+  const sel = sub.tubes[sub.selTube];
+  if (n === 1) { if (sel.type) chosen = [sub.selTube]; }
+  else {
+    const pool = sub.tubes.map((t, i) => i).filter(i => !sub.tubes[i].stern && sub.tubes[i].type);
+    chosen = pool.slice(0, n);
+  }
+  if (!chosen.length) { msg(n === 1 ? `Tub ${sel.id} buit.` : 'No hi ha tubs de proa carregats.', 'warn'); return; }
+  const sols = [];
+  for (let k = 0; k < chosen.length; k++) {
+    const off = chosen.length > 1 ? tdc.spread*(k - (chosen.length - 1)/2) : 0;
+    const tb = sub.tubes[chosen[k]];
+    const s = solveFiring(tb, tb.type, off);
+    if (tdc.valid && Math.abs(s.gyro) > 90) { msg(`Tub ${tb.id}: angle giroscòpic fora de límit. Gireu el submarí.`, 'warn'); return; }
+    sols.push({ idx: chosen[k], gyroOff: off });
+  }
+  sols.forEach((s, k) => pendingLaunch.push({ at: simT + k*1.6, idx: s.idx, off: s.gyroOff }));
+}
+function launchTube(idx, off) {
+  const tb = sub.tubes[idx]; if (!tb.type) return;
+  const s = solveFiring(tb, tb.type, off);
+  const gyro = tdc.valid ? clamp(s.gyro, -90, 90) : off;
+  const spec = torpSpec(tb.type);
+  const base = norm360(sub.hdg + (tb.stern ? 180 : 0));
+  const bd = dirv(base);
+  const t = {
+    id: entId++, type: tb.type, v: spec.v, range: spec.range, x: sub.x + bd.x*30, y: sub.y + bd.y*30,
+    depth: Math.max(2, sub.depth - 2.5), setDepth: tdc.depth, hdg: base, crs: norm360(base + gyro), run: 0,
+    pistol: tdc.pistol, alive: true, trailT: 0, tube: tb.id,
+    premature: tdc.pistol === 'magnetic' && Math.random() < 0.08 ? 300 + Math.random()*900 : 1e9,
+    dud: Math.random(),
+    mesh: new THREE.Mesh(torpGeo, torpMat),
+  };
+  scene.add(t.mesh);
+  torps.push(t);
+  tb.type = null;
+  M.fired++; if (M.stage === 2) M.hulkTorps++;
+  AudioSys.launch(); shake = Math.max(shake, 0.15);
+  msg(`Tub ${tb.id} — Los! Torpede ${t.type} llançat. Angle giroscòpic ${gyro >= 0 ? '+' : ''}${gyro.toFixed(1)}°${s.runTime && tdc.valid ? `, temps estimat ${Math.round(s.runTime)} s` : ''}.`);
+  lastTorp = t;
+  const [X, Z] = W3(t.x, t.y);
+  for (let i = 0; i < 25; i++) emit(X + gauss(), -t.depth + gauss(), Z + gauss(), gauss()*2, 3 + Math.random()*3, gauss()*2, 1, 0.6, 5, 0.7, 0.8, 0.9, 0.95, -0.5, 0.2);
+}
+let lastTorp = null;
+
+function shipHalfWidth(C, along) {
+  const t = (along + C.L/2)/C.L; // 0 popa ... 1 proa? (along positiu cap a proa)
+  const tb = 1 - t; // 0 proa
+  let w = 1;
+  if (tb < 0.2) w = Math.pow(Math.sin((tb/0.2)*Math.PI/2), 0.85);
+  else if (tb > 0.86) w = 1 - 0.4*Math.pow((tb - 0.86)/0.14, 2);
+  return C.B/2*w;
+}
+
+function updateTorps(dt) {
+  for (const t of torps) {
+    if (!t.alive) continue;
+    const step = t.v*dt; t.run += step;
+    if (t.run > T_STRAIGHT) {
+      const d = angDiff(t.crs, t.hdg); const mx = (t.v/T_RADIUS)*R2D*dt;
+      t.hdg = norm360(t.hdg + clamp(d, -mx, mx));
+    }
+    const dv = dirv(t.hdg); t.x += dv.x*step; t.y += dv.y*step;
+    t.depth += clamp(t.setDepth - t.depth, -1.2*dt, 1.2*dt);
+    if (t.type === 'G7a') {
+      t.trailT -= step;
+      if (t.trailT <= 0) { t.trailT = 4; const [X, Z] = W3(t.x, t.y); emit(X - dv.x*12, hAt(t.x, t.y) + 0.25, Z + dv.y*12, 0, 0, 0, 2.2, 0.12, 45, 0.6, 0.9, 0.94, 0.94); }
+    }
+    const armed = t.run > 280;
+    if (armed && t.run > t.premature) { detonate(t, null, 'premature'); continue; }
+    if (t.run > t.range) { t.alive = false; scene.remove(t.mesh); msg(`El torpede del tub ${t.tube} ha esgotat el recorregut.`); continue; }
+    for (const s of ships) {
+      if (s.sunk) continue;
+      const rx = t.x - s.x, ry = t.y - s.y;
+      if (rx*rx + ry*ry > (s.C.L*0.6)**2) continue;
+      const f = dirv(s.hdg), r = dirv(s.hdg + 90);
+      const along = rx*f.x + ry*f.y, across = rx*r.x + ry*r.y;
+      if (Math.abs(along) > s.C.L/2*0.97) continue;
+      const hw = shipHalfWidth(s.C, along);
+      if (Math.abs(across) > hw) continue;
+      const draft = s.C.draft + s.sinkY;
+      if (t.depth < draft) {
+        if (!armed) { t.alive = false; scene.remove(t.mesh); AudioSys.clank(); msg(`Impacte del tub ${t.tube} sense explosió: el torpede encara no estava armat (<300 m).`, 'warn', true); break; }
+        const imp = Math.abs(angDiff(t.hdg, s.hdg)); const ia = imp > 90 ? 180 - imp : imp;
+        const dudP = 0.05 + (ia < 25 ? 0.45 : ia < 45 ? 0.15 : 0);
+        if (t.pistol === 'contact' && t.dud < dudP) { t.alive = false; scene.remove(t.mesh); AudioSys.clank(); msg(`Torpede fallit! L'espoleta de contacte no ha funcionat (angle d'impacte ${Math.round(ia)}°).`, 'warn', true); break; }
+        detonate(t, s, 'contact'); break;
+      } else if (t.pistol === 'magnetic' && t.depth < draft + 4.5 && armed) {
+        if (t.dud < 0.1) continue;
+        detonate(t, s, 'magnetic'); break;
+      }
+    }
+  }
+  for (let i = torps.length - 1; i >= 0; i--) if (!torps[i].alive) torps.splice(i, 1);
+}
+function detonate(t, s, how) {
+  t.alive = false; scene.remove(t.mesh);
+  const dsub = Math.hypot(t.x - sub.x, t.y - sub.y);
+  AudioSys.boom(clamp(1.3 - dsub/6000, 0.15, 1.2));
+  sprayColumn(t.x, t.y, how === 'magnetic' ? 1.4 : 1);
+  if (dsub < 2500) shake = Math.max(shake, 0.4*(1 - dsub/2500));
+  flashAt(t.x, t.y, 1);
+  if (!s) { msg(`Explosió prematura del torpede del tub ${t.tube} (espoleta magnètica).`, 'warn', true); return; }
+  const dmg = (0.8 + Math.random()*0.5)*(how === 'magnetic' ? 1.5 : 1);
+  s.flood += dmg; s.hits++; M.hits++;
+  smokeBurst(t.x, t.y, 4, 60);
+  msg(`IMPACTE! Torpede del tub ${t.tube} al ${s.name} (${how === 'magnetic' ? 'espoleta magnètica, sota la quilla' : 'contacte'}).`, 'good', true);
+  if (s.flood >= s.C.hp && !s.sinking) { s.sinking = true; s.sinkT = 0; msg(`El ${s.name} s'enfonsa!`, 'good'); }
+}
+function flashAt(x, y, k) {
+  const [X, Z] = W3(x, y);
+  flashLight.position.set(X, 8, Z); flashLight.intensity = 6*k; flashT = 0.6;
+}
+let flashT = 0;
+
+/* =========================================================================
+   VAIXELLS I ESCORTA
+   ========================================================================= */
+function updateShips(dt) {
+  for (const s of ships) {
+    if (s.sunk) continue;
+    const C = s.C;
+    if (s.ai) escortAI(s, dt);
+    let tkn = s.ordKn;
+    if (s.flood > 0) tkn *= clamp(1 - s.flood/C.hp*1.4, 0, 1);
+    if (s.sinking) tkn = 0;
+    const tau = s.ai ? 18 : 70;
+    s.v += (tkn*KN - s.v)*(1 - Math.exp(-dt/tau));
+    const rate = (s.ai ? 4.0 : 1.2)*clamp(s.v/(5*KN), 0.15, 1.3);
+    s.hdg = norm360(s.hdg + clamp(angDiff(s.ordHdg, s.hdg), -rate*dt, rate*dt));
+    const d = dirv(s.hdg); s.x += d.x*s.v*dt; s.y += d.y*s.v*dt;
+    // inundació
+    const tl = s.sinking ? 0 : clamp(s.flood/C.hp, 0, 1)*7;
+    s.list += (tl*s.trimDir - s.list)*(1 - Math.exp(-dt/40));
+    if (s.sinking) {
+      s.sinkT += dt;
+      s.sinkY = 0.03*s.sinkT + 0.0016*s.sinkT*s.sinkT;
+      s.trim += (11*s.trimDir - s.trim)*(1 - Math.exp(-dt/60));
+      s.list += (16*s.trimDir - s.list)*(1 - Math.exp(-dt/50));
+      if (Math.random() < dt*0.8) { const [X, Z] = W3(s.x, s.y); emit(X + gauss()*s.C.B/3, 0.4, Z + gauss()*20, 0, 0.2, 0, 4, 0.8, 20, 0.6, 0.85, 0.9, 0.9); }
+      if (s.sinkY > C.H + 30) {
+        s.sunk = true; scene.remove(s.mesh); M.sunk++;
+        bubbles(s.x, s.y, 5, 120);
+        msg(`El ${s.name} ha desaparegut sota l'aigua.`, 'good');
+      }
+    } else if (s.flood > 0) s.sinkY += ((s.flood/C.hp)*2.5 - s.sinkY)*(1 - Math.exp(-dt/60));
+    // fum i estela
+    if (!s.sinking && TC_STEPS[tcIdx] <= 16) {
+      s.smokeT -= dt;
+      if (s.smokeT <= 0 && s.mesh.userData.funnel && s.ordKn > 0) {
+        s.smokeT = 0.6;
+        const fp = s.mesh.userData.funnel.clone(); s.mesh.localToWorld(fp);
+        emit(fp.x, fp.y, fp.z, 2.2 + gauss()*0.3, 1.2, -0.6 + gauss()*0.3, 2.5, 1.0, 22, 0.32, 0.32, 0.32, 0.34, -0.03, 0.02);
+      }
+      s.wakeT -= dt;
+      if (s.wakeT <= 0 && s.v > 1) {
+        s.wakeT = 0.5;
+        const sx = s.x - d.x*C.L*0.48, sy = s.y - d.y*C.L*0.48; const [X, Z] = W3(sx, sy);
+        emit(X + gauss()*1.5, hAt(sx, sy) + 0.25, Z + gauss()*1.5, 0, 0, 0, C.B*0.5, 0.35, 40, 0.5, 0.88, 0.92, 0.92);
+        const bx = s.x + d.x*C.L*0.47, by = s.y + d.y*C.L*0.47; const [BX, BZ] = W3(bx, by);
+        if (s.v > 3) for (const sd of [-1, 1]) { const r = dirv(s.hdg + 90*sd); emit(BX + r.x*C.B*0.4, hAt(bx, by) + 0.4, BZ - r.y*C.B*0.4, r.x*s.v*0.3, 0.6, -r.y*s.v*0.3, 2.5, 0.8, 8, 0.6, 0.92, 0.95, 0.95, 0, 0.2); }
+      }
+    }
+    // col·lisió amb el submarí
+    const rx = sub.x - s.x, ry = sub.y - s.y;
+    if (rx*rx + ry*ry < (C.L*0.6 + 34)**2) {
+      const f = dirv(s.hdg), r = dirv(s.hdg + 90);
+      const along = rx*f.x + ry*f.y, across = rx*r.x + ry*r.y;
+      const subTop = 9.7 - sub.depth + SURF - 4.7;
+      if (Math.abs(along) < C.L/2 + 20 && Math.abs(across) < shipHalfWidth(C, clamp(along, -C.L/2, C.L/2)) + 3 && subTop > -(C.draft + s.sinkY)) {
+        if (!s.colT || simT - s.colT > 6) {
+          s.colT = simT; const rel = Math.abs(sub.v - s.v) + 1;
+          sub.hull -= 8 + rel*4; AudioSys.boom(0.7, true); shake = 1;
+          msg(`COL·LISIÓ amb el ${s.name}!`, 'warn', true);
+        }
+      }
+    }
+  }
+}
+
+function escortAI(e, dt) {
+  const A = e.ai;
+  const d = Math.hypot(sub.x - e.x, sub.y - e.y);
+  const surf = sub.depth <= SURF + 1;
+  // sensors
+  A.checkT -= dt;
+  if (A.checkT <= 0 && A.mode !== 'leave') {
+    A.checkT = 2.5;
+    const layer = sub.depth > LAYER ? 0.35 : 1;
+    const eKn = e.v/KN;
+    let det = null;
+    if (surf && d < 7000) det = { acc: 30, depth: 5, how: 'visual' };
+    const ph = periHead();
+    if (!det && ph.above && d < 1800 && Math.random() < (Math.abs(sub.v)/KN > 5 ? 0.6 : 0.25)) det = { acc: 40, depth: 13, how: 'periscopi' };
+    if (!det && eKn <= 15) {
+      const sig = subNoise()*Math.pow(1100/Math.max(d, 50), 2)*layer;
+      if (Math.random() < clamp(sig - 0.25, 0, 0.85)) det = { acc: d*0.12, depth: null, how: 'hidròfon' };
+    }
+    if (!det && A.pinging && eKn <= 18 && d < 2300 && d > 140) {
+      const rel = Math.abs(angDiff(brgTo(e.x, e.y, sub.x, sub.y), e.hdg));
+      if (rel < 150) {
+        const aspect = 0.55 + 0.45*Math.abs(Math.sin((brgTo(sub.x, sub.y, e.x, e.y) - sub.hdg)*D2R));
+        const q = (1 - d/2300)*layer*aspect*1.15;
+        if (Math.random() < clamp(q, 0, 0.9)) det = { acc: 25 + d*0.03, depth: sub.depth + gauss()*8, how: 'ASDIC' };
+      }
+    }
+    if (det) {
+      const kd = A.known;
+      A.known = { x: sub.x + gauss()*det.acc, y: sub.y + gauss()*det.acc, t: simT, depth: det.depth ?? (kd ? kd.depth : 60 + gauss()*15) };
+      if (det.how === 'visual' || det.how === 'periscopi') {
+        if (!A.visMsg || simT - A.visMsg > 30) { A.visMsg = simT; msg(`El T 11 us ha avistat (${det.how})!`, 'warn', true); }
+        if (M.stage === 4 && surf && (!A.surfPen || simT - A.surfPen > 60)) { A.surfPen = simT; M.dcLethal++; msg('Àrbitre: submarí en superfície a l\'abast dels canons — impacte simulat!', 'warn'); }
+      }
+      if ((A.mode === 'search' || A.mode === 'approach') && d < 1700) {
+        A.mode = 'attack';
+        if (sub.depth > SURF + 1) msg('Hidròfon: les hèlixs del torpediner acceleren! Passada d\'atac!', 'warn', true);
+      }
+    }
+  }
+  // sonar actiu
+  if (A.mode === 'search' || A.mode === 'attack' || A.mode === 'runout') {
+    A.pinging = true; A.pingT -= dt;
+    if (A.pingT <= 0) { A.pingT = 5.5; if (sub.depth > SURF + 1 || view !== 'bridge') AudioSys.ping(clamp(1 - d/4500, 0, 1)); }
+  } else A.pinging = false;
+  const K = A.known;
+  switch (A.mode) {
+    case 'approach':
+      e.ordKn = 22; e.ordHdg = brgTo(e.x, e.y, K.x, K.y);
+      if (Math.hypot(K.x - e.x, K.y - e.y) < 2300) { A.mode = 'search'; }
+      break;
+    case 'search': {
+      e.ordKn = 12;
+      const dk = Math.hypot(K.x - e.x, K.y - e.y);
+      if (dk > 400) e.ordHdg = brgTo(e.x, e.y, K.x, K.y);
+      else { A.circleT -= dt; if (A.circleT <= 0) { A.circleT = 25; e.ordHdg = norm360(e.hdg + 70 + Math.random()*40); } }
+      if (simT - K.t > 150) { K.x += gauss()*400; K.y += gauss()*400; K.t = simT - 60; }
+      break;
+    }
+    case 'attack': {
+      e.ordKn = 24;
+      e.ordHdg = brgTo(e.x, e.y, K.x, K.y);
+      const dk = Math.hypot(K.x - e.x, K.y - e.y);
+      if (dk < 50 || (dk < 140 && Math.abs(angDiff(e.ordHdg, e.hdg)) > 60)) { A.mode = 'drop'; A.dropN = 0; A.dropT = 0; A.dropHdg = e.hdg; }
+      break;
+    }
+    case 'drop':
+      e.ordKn = 24; e.ordHdg = A.dropHdg;
+      A.dropT -= dt;
+      if (A.dropT <= 0) {
+        A.dropT = 1.7;
+        const offs = [-14, -4, 6, 16, -2];
+        const sd = clamp(A.known.depth + offs[A.dropN] + gauss()*6, 15, 200);
+        const bd = dirv(e.hdg);
+        const c = { x: e.x - bd.x*e.C.L*0.48, y: e.y - bd.y*e.C.L*0.48, depth: 0, set: sd, mesh: new THREE.Mesh(dcGeo, torpMat) };
+        scene.add(c.mesh); charges.push(c);
+        A.dropN++;
+        if (A.dropN >= 5) { A.mode = 'runout'; A.runT = 45; if (!M.firstDC) { M.firstDC = true; msg('Hidròfon: càrregues a l\'aigua!', 'warn', true); } }
+      }
+      break;
+    case 'runout':
+      e.ordKn = 20; A.runT -= dt;
+      if (A.runT <= 0) { A.mode = 'search'; e.ordHdg = brgTo(e.x, e.y, A.known.x, A.known.y); }
+      break;
+    case 'leave':
+      e.ordKn = 15; e.ordHdg = brgTo(sub.x, sub.y, e.x, e.y);
+      break;
+  }
+}
+
+function updateCharges(dt) {
+  for (const c of charges) {
+    if (c.done) continue;
+    c.depth += 2.6*dt;
+    if (c.depth >= c.set) {
+      c.done = true; scene.remove(c.mesh);
+      const dh = Math.hypot(c.x - sub.x, c.y - sub.y), dv = Math.abs(c.depth - sub.depth);
+      const d3 = Math.hypot(dh, dv);
+      AudioSys.boom(clamp(1.4 - d3/1500, 0.2, 1.5), true);
+      bubbles(c.x, c.y, c.depth, 80);
+      setTimeout(() => sprayColumn(c.x, c.y, clamp(1.2 - c.depth/150, 0.4, 1.2)), 300);
+      shake = Math.max(shake, clamp(1.4 - d3/150, 0.05, 1.5));
+      if (d3 < 20) {
+        M.dcLethal++; flashRed = 1.2; sub.hull -= 6;
+        msg(`ÀRBITRE: càrrega a ${Math.round(d3)} m — impacte LETAL simulat!`, 'warn', true);
+      } else if (d3 < 50) {
+        M.dcNear++; flashRed = 0.6; sub.hull -= 1.5;
+        msg(`Càrrega molt a prop (${Math.round(d3)} m). Danys lleus simulats.`, 'warn', true);
+      }
+    }
+  }
+  for (let i = charges.length - 1; i >= 0; i--) if (charges[i].done) charges.splice(i, 1);
+}
+let flashRed = 0;
+
+/* =========================================================================
+   SENSORS: vigies, periscopi, hidròfon
+   ========================================================================= */
+let sensorT = 0, hydroT = 0;
+let hydroContacts = [];
+function updateSensors(dt) {
+  sensorT -= dt;
+  if (sensorT <= 0) {
+    sensorT = 1;
+    const surf = sub.depth <= SURF + 1;
+    const ph = periHead();
+    const rng = surf ? 10000 : ph.above ? 6500 : 0;
+    for (const s of ships) {
+      if (s.sunk) continue;
+      const d = Math.hypot(s.x - sub.x, s.y - sub.y);
+      if (d < rng) {
+        s.known = { x: s.x, y: s.y, t: simT, hdg: s.hdg };
+        if (!s.spotted) {
+          s.spotted = true;
+          msg(`${surf ? 'Vigia' : 'Periscopi'}: Ombra a la demora ${f3(brgTo(sub.x, sub.y, s.x, s.y))}°, distància aprox. ${(Math.round(d/500)*0.5).toFixed(1)} km!`, '', true);
+        }
+      }
+    }
+  }
+  hydroT -= dt;
+  if (hydroT <= 0) {
+    hydroT = 0.5;
+    const surf = sub.depth <= SURF + 1;
+    const own = subNoise();
+    const sens = (surf ? 0.3 : 1)/(1 + own*1.3);
+    const list = [];
+    const srcs = [];
+    for (const s of ships) if (!s.sunk) srcs.push({ ent: s, x: s.x, y: s.y, n: s.C.noise*(s.sinking ? 0.6 : 0.25 + (s.v/KN)/9), lab: s.sinking ? 'sorolls de trencament, vaixell enfonsant-se' : (s.C === CLASSES.torpedoboat && s.v/KN > 17 ? 'turbines RÀPIDES — vaixell de guerra en atac!' : s.C.sonar) });
+    for (const t of torps) srcs.push({ ent: t, x: t.x, y: t.y, n: 1.4, lab: 'hèlix aguda d\'alta velocitat — torpede' });
+    for (const s of srcs) {
+      const d = Math.max(50, Math.hypot(s.x - sub.x, s.y - sub.y));
+      const b = brgTo(sub.x, sub.y, s.x, s.y);
+      const rel = Math.abs(angDiff(b, sub.hdg));
+      let I = s.n*sens*Math.pow(3500/d, 1.5);
+      if (rel > 155) I *= 0.12;
+      if (I < 0.08) continue;
+      const jit = clamp(1.2/Math.sqrt(I), 0.5, 7);
+      list.push({ brg: norm360(b + gauss()*jit), I, lab: s.lab, ent: s.ent });
+      if (!s.ent.heard && !surf) { s.ent.heard = true; if (!(s.ent.type)) msg(`Hidròfon: soroll d'hèlixs a la demora ${f3(b)}° — ${s.lab}.`); }
+    }
+    hydroContacts = list;
+  }
+}
+
+/* =========================================================================
+   PAS DE SIMULACIÓ
+   ========================================================================= */
+function step(dt) {
+  simT += dt;
+  updateSub(dt);
+  for (let i = pendingLaunch.length - 1; i >= 0; i--) if (simT >= pendingLaunch[i].at) { const p = pendingLaunch.splice(i, 1)[0]; launchTube(p.idx, p.off); }
+  updateTorps(dt);
+  updateShips(dt);
+  updateCharges(dt);
+  updateSensors(dt);
+  if (tdc.lock && settings.assist) {
+    const s = tdc.lock;
+    if (s.sunk) tdc.lock = null;
+    else { tdc.x = s.x; tdc.y = s.y; tdc.t = simT; tdc.course = s.hdg; tdc.speed = s.v/KN; tdc.valid = true; }
+  }
+  missionUpdate();
+}
+
+/* =========================================================================
+   CÀMERA I VISTES
+   ========================================================================= */
+const look = { bridgeYaw: 0, bridgePitch: -2, scopeBrg: 0, scopeZoom: false, binoZoom: false, extYaw: 220, extPitch: 18, extDist: 120, extSubj: 'sub' };
+let stadi = { on: false, y: 60 };
+let camUnder = false;
+
+function setView(v) {
+  if (v === 'bridge' && sub.depth > SURF + 1.2) { msg('No podeu pujar al pont en immersió.', 'warn'); return; }
+  view = v;
+  if (v !== 'periscope' && v !== 'bridge') stadi.on = false;
+  document.querySelectorAll('#tabs button[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $('mapCv').style.display = v === 'map' ? 'block' : 'none';
+  $('scopeMask').style.display = v === 'periscope' ? 'block' : 'none';
+}
+
+function subGroupY() { return SURF - sub.depth + sub.bob; }
+function updateVisuals(rdt) {
+  // submarí
+  const surfF = Math.exp(-Math.max(0, sub.depth - SURF)/6);
+  const [SX, SZ] = W3(sub.x, sub.y);
+  const d = dirv(sub.hdg);
+  const hb = hAt(sub.x + d.x*25, sub.y + d.y*25), hs = hAt(sub.x - d.x*25, sub.y - d.y*25);
+  const r = dirv(sub.hdg + 90);
+  const hp = hAt(sub.x - r.x*4, sub.y - r.y*4), hst = hAt(sub.x + r.x*4, sub.y + r.y*4);
+  const hc = hAt(sub.x, sub.y);
+  sub.bob = lerp(sub.bob, hc*0.6*surfF, 0.1);
+  const wavePitch = Math.atan2(hb - hs, 50)*R2D*0.6*surfF;
+  const waveRoll = Math.atan2(hst - hp, 8)*R2D*0.5*surfF;
+  const divePitch = clamp(Math.atan2(sub.vz, Math.max(Math.abs(sub.v), 1.5))*R2D, -12, 12);
+  sub.pitch = lerp(sub.pitch, divePitch + wavePitch, 0.05);
+  sub.roll = lerp(sub.roll, waveRoll + clamp(sub.rudder*sub.v*0.05, -4, 4), 0.05);
+  subMesh.position.set(SX, subGroupY(), SZ);
+  subMesh.rotation.set(-sub.pitch*D2R, -sub.hdg*D2R, sub.roll*D2R, 'YXZ');
+  const pm = subMesh.userData.peri, hd = subMesh.userData.head, dy = subMesh.userData.deckY;
+  pm.position.y = dy + 3.6 + sub.peri*4.9 - 0.4; hd.position.set(0, dy + 3.6 + 3 + sub.peri*4.9 - 0.4 + 0.05, -0.9);
+  // vaixells
+  for (const s of ships) {
+    if (s.sunk) continue;
+    const [X, Z] = W3(s.x, s.y);
+    const h = hAt(s.x, s.y);
+    const dd = dirv(s.hdg);
+    const hb2 = hAt(s.x + dd.x*s.C.L*0.4, s.y + dd.y*s.C.L*0.4), hs2 = hAt(s.x - dd.x*s.C.L*0.4, s.y - dd.y*s.C.L*0.4);
+    s.mesh.position.set(X, h*0.45 - s.sinkY, Z);
+    const wp = Math.atan2(hb2 - hs2, s.C.L*0.8)*R2D*0.5;
+    const roll = Math.sin(simT*(s.ai ? 1.0 : 0.55) + s.rollPh)*(s.ai ? 2.5 : 1.2);
+    s.mesh.rotation.set((-wp - s.trim)*D2R, -s.hdg*D2R, (roll + s.list)*D2R, 'YXZ');
+  }
+  for (const t of torps) {
+    const [X, Z] = W3(t.x, t.y);
+    t.mesh.position.set(X, -t.depth, Z); t.mesh.rotation.set(0, -t.hdg*D2R, 0);
+    if (Math.random() < 0.3) emit(X - Math.sin(t.hdg*D2R)*4, -t.depth, Z + Math.cos(t.hdg*D2R)*4, gauss()*0.3, 0.8, gauss()*0.3, 0.4, 0.3, 3, 0.5, 0.8, 0.9, 0.95, -0.4, 0.3);
+  }
+  for (const c of charges) { const [X, Z] = W3(c.x, c.y); c.mesh.position.set(X, -c.depth, Z); c.mesh.rotation.z = simT; }
+  // estela del submarí
+  if (sub.depth <= SURF + 2 && Math.abs(sub.v) > 1 && TC_STEPS[tcIdx] <= 16 && !paused) {
+    sub.wakeT = (sub.wakeT || 0) - rdt*TC_STEPS[tcIdx];
+    if (sub.wakeT <= 0) {
+      sub.wakeT = 0.35;
+      const sx = sub.x - d.x*32, sy = sub.y - d.y*32; const [X, Z] = W3(sx, sy);
+      emit(X, hAt(sx, sy) + 0.25, Z, 0, 0, 0, 3, 0.3, 30, 0.5, 0.9, 0.93, 0.93);
+      const bx = sub.x + d.x*31, by = sub.y + d.y*31; const [BX, BZ] = W3(bx, by);
+      for (const sd of [-1, 1]) emit(BX + r.x*sd*1.5, hAt(bx, by) + 0.3, BZ - r.y*sd*1.5, r.x*sd*sub.v*0.3, 0.8, -r.y*sd*sub.v*0.3, 1.5, 0.8, 5, 0.6, 0.93, 0.95, 0.95, 0, 0.2);
+    }
+  }
+}
+
+function updateCamera(rdt) {
+  const g = subMesh;
+  let fov = 60;
+  const surfaced = sub.depth <= SURF + 1.2;
+  if (view === 'bridge' && !surfaced) { setView('periscope'); msg('Pont tancat. Vista de periscopi.'); }
+  if (view === 'bridge') {
+    const p = new THREE.Vector3(0, g.userData.deckY + 3.65 + 1.0, -1.4); g.localToWorld(p);
+    camera.position.copy(p);
+    camera.rotation.set((look.bridgePitch + sub.pitch*0.6)*D2R, -(sub.hdg + look.bridgeYaw)*D2R, -sub.roll*0.6*D2R, 'YXZ');
+    fov = look.binoZoom ? 8.5 : 62;
+    if (stadi.on) camera.rotation.x = 0;
+  } else if (view === 'periscope') {
+    const ph = periHead();
+    const [X, Z] = W3(ph.x, ph.y);
+    camera.position.set(X, ph.h, Z);
+    camera.rotation.set(0, -(sub.hdg + look.scopeBrg)*D2R, sub.roll*0.2*D2R, 'YXZ');
+    fov = look.scopeZoom ? 8 : 32;
+  } else {
+    let tp;
+    if (look.extSubj === 'torp' && lastTorp && lastTorp.alive) { const [X, Z] = W3(lastTorp.x, lastTorp.y); tp = new THREE.Vector3(X, -lastTorp.depth, Z); }
+    else if (look.extSubj === 'target' && (tdc.lock || nearestShip())) { const s = tdc.lock || nearestShip(); const [X, Z] = W3(s.x, s.y); tp = new THREE.Vector3(X, 4 - s.sinkY, Z); }
+    else { look.extSubj = look.extSubj === 'sub' ? 'sub' : look.extSubj; tp = subMesh.position.clone().add(new THREE.Vector3(0, 3, 0)); }
+    const yaw = (look.extYaw + (look.extSubj === 'sub' ? sub.hdg : 0))*D2R, pit = look.extPitch*D2R;
+    const off = new THREE.Vector3(Math.sin(yaw)*Math.cos(pit), Math.sin(pit), -Math.cos(yaw)*Math.cos(pit)).multiplyScalar(look.extDist);
+    camera.position.copy(tp).add(off);
+    camera.lookAt(tp);
+    fov = 55;
+  }
+  if (shake > 0.01) {
+    camera.rotation.x += gauss()*0.004*shake; camera.rotation.y += gauss()*0.004*shake;
+    camera.position.y += gauss()*0.05*shake;
+    shake *= Math.exp(-rdt*1.8);
+  }
+  if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  // sota l'aigua?
+  const wh = waveH(camera.position.x, camera.position.z);
+  camUnder = camera.position.y < wh - 0.05;
+  const cd = Math.max(0, -camera.position.y);
+  const fall = Math.exp(-cd/70);
+  const uw = new THREE.Color(0.035*fall + 0.004, 0.15*fall + 0.01, 0.17*fall + 0.012);
+  if (camUnder) {
+    scene.fog.color.copy(uw); scene.fog.density = 0.019; renderer.setClearColor(uw);
+    oceanUniforms.uFogColor.value.copy(uw); oceanUniforms.uFogDensity.value = 0.019; oceanUniforms.uUnder.value = 1;
+    pMat.uniforms.uFogColor.value.copy(uw); pMat.uniforms.uFogDensity.value = 0.019;
+    sky.visible = false; hemi.intensity = 0.9 + 1.3*fall; sunLight.intensity = 1.8*fall;
+  } else {
+    scene.fog.color.copy(FOG_COL); scene.fog.density = FOG_DEN; renderer.setClearColor(FOG_COL);
+    oceanUniforms.uFogColor.value.copy(FOG_COL); oceanUniforms.uFogDensity.value = FOG_DEN; oceanUniforms.uUnder.value = 0;
+    pMat.uniforms.uFogColor.value.copy(FOG_COL); pMat.uniforms.uFogDensity.value = FOG_DEN;
+    sky.visible = true; hemi.intensity = 2.2; sunLight.intensity = 2.6;
+  }
+  oceanUniforms.uUWCol.value.copy(uw);
+  ocean.position.set(Math.round(camera.position.x/4)*4, 0, Math.round(camera.position.z/4)*4);
+  seabed.position.x = camera.position.x; seabed.position.z = camera.position.z;
+  sky.position.copy(camera.position);
+  pMat.uniforms.uScale.value = window.innerHeight*renderer.getPixelRatio()/(2*Math.tan(camera.fov*D2R/2));
+  oceanUniforms.uTime.value = simT;
+  // visibilitat del propi submarí
+  subMesh.visible = view !== 'periscope';
+}
+
+function nearestShip() {
+  let best = null, bd = 1e9;
+  for (const s of ships) { if (s.sunk) continue; const d = Math.hypot(s.x - sub.x, s.y - sub.y); if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+function opticBearing() { return norm360(sub.hdg + (view === 'periscope' ? look.scopeBrg : look.bridgeYaw)); }
+
+/* =========================================================================
+   SUPERPOSICIONS 2D
+   ========================================================================= */
+const ov = $('ov'), octx = ov.getContext('2d');
+const mapCv = $('mapCv'), mctx = mapCv.getContext('2d');
+const instr = $('instr'), ictx = instr.getContext('2d');
+const hydroCv = $('hydroCv'), hctx = hydroCv.getContext('2d');
+function fitCanvas(c, ctx) {
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  const w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w*dpr) || c.height !== Math.round(h*dpr)) { c.width = Math.round(w*dpr); c.height = Math.round(h*dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [w, h];
+}
+
+function drawOverlay() {
+  const [W, H] = fitCanvas(ov, octx);
+  octx.clearRect(0, 0, W, H);
+  const info = [];
+  if (view === 'periscope' || view === 'bridge') {
+    const cx = W/2, cy = H*0.46;
+    const fpx = (H/2)/Math.tan(camera.fov*D2R/2);
+    const brg = opticBearing();
+    const rel = norm360(view === 'periscope' ? look.scopeBrg : look.bridgeYaw);
+    const optical = view === 'periscope' || look.binoZoom;
+    if (optical) {
+      octx.strokeStyle = 'rgba(10,10,10,.85)'; octx.fillStyle = 'rgba(10,10,10,.85)'; octx.lineWidth = 1.2;
+      const R = view === 'periscope' ? Math.min(W, H)*0.41 : Math.min(W, H)*0.45;
+      octx.beginPath(); octx.moveTo(cx - R, cy); octx.lineTo(cx + R, cy); octx.stroke();
+      octx.beginPath(); octx.moveTo(cx, cy - R*0.6); octx.lineTo(cx, cy + R*0.5); octx.stroke();
+      // escala de demores
+      const pxPerDeg = fpx*D2R;
+      const step = pxPerDeg > 25 ? 1 : pxPerDeg > 8 ? 5 : 10;
+      octx.font = '11px Courier New'; octx.textAlign = 'center';
+      for (let a = -60; a <= 60; a += 1) {
+        const ab = Math.round(rel) + a;
+        if (ab % step !== 0) continue;
+        const x = cx + Math.tan((ab - rel)*D2R)*fpx;
+        if (Math.abs(x - cx) > R) continue;
+        const big = ab % (step*2) === 0;
+        octx.beginPath(); octx.moveTo(x, cy - (big ? 9 : 5)); octx.lineTo(x, cy + (big ? 9 : 5)); octx.stroke();
+        if (big) octx.fillText(String(norm360(ab)).padStart(3, '0'), x, cy + 22);
+      }
+      // escala vertical (mil·lèsimes) per a l'estadímetre
+      for (let k = -4; k <= 6; k++) { const y = cy - k*R*0.08; octx.beginPath(); octx.moveTo(cx - 6, y); octx.lineTo(cx + 6, y); octx.stroke(); }
+    } else {
+      octx.strokeStyle = 'rgba(255,233,168,.6)'; octx.lineWidth = 1;
+      octx.beginPath(); octx.moveTo(cx - 12, cy); octx.lineTo(cx + 12, cy); octx.moveTo(cx, cy - 12); octx.lineTo(cx, cy + 12); octx.stroke();
+    }
+    if (stadi.on) {
+      const y = cy - stadi.y;
+      octx.strokeStyle = 'rgba(255,60,40,.95)'; octx.lineWidth = 1.5;
+      octx.beginPath(); octx.moveTo(cx - 80, y); octx.lineTo(cx + 80, y); octx.stroke();
+      octx.setLineDash([4, 4]); octx.beginPath(); octx.moveTo(cx, cy); octx.lineTo(cx, y); octx.stroke(); octx.setLineDash([]);
+      const C = tdc.idClass ? CLASSES[tdc.idClass] : null;
+      const alpha = Math.atan(stadi.y/fpx);
+      if (C) {
+        const rng = (C.mast - camera.position.y)/Math.tan(Math.max(alpha, 1e-5));
+        info.push(`ESTADÍMETRE — ${C.name}, pal ${C.mast} m → distància ${Math.round(rng)} m   [roda/↑↓ ajustar · Enter enviar · X sortir]`);
+      } else info.push('ESTADÍMETRE — Identifiqueu primer el blanc (I)');
+    }
+    if (tdc.lock && settings.assist) {
+      const s = tdc.lock; const b = brgTo(sub.x, sub.y, s.x, s.y);
+      const a = angDiff(b, brg);
+      if (Math.abs(a) < camera.fov*camera.aspect/2) { const x = cx + Math.tan(a*D2R)*fpx; octx.strokeStyle = 'rgba(255,200,60,.9)'; octx.strokeRect(x - 14, cy - 40, 28, 50); }
+    }
+    info.push(`Demora ${f3(brg)}° (relativa ${f3(rel)}°)   ${view === 'periscope' ? (look.scopeZoom ? '6×' : '1,5×') : (look.binoZoom ? 'Prismàtics 7×' : 'Ull nu')}`);
+    if (view === 'periscope') {
+      const ph = periHead();
+      if (sub.peri < 0.95) info.push(sub.periUp ? 'Alçant el periscopi…' : 'PERISCOPI ABAIXAT — premeu U');
+      else if (!ph.above) info.push(`Capçal del periscopi sota l'aigua (${(ph.wave - ph.h).toFixed(1)} m) — pugeu a cota periscòpica (G)`);
+      if (Math.abs(sub.v)/KN > 6 && sub.peri > 0.5 && !(sub.depth <= SURF + 1)) info.push('Vibracions: velocitat massa alta per al periscopi!');
+    }
+  } else if (view === 'external') {
+    info.push(`Càmera exterior — ${look.extSubj === 'sub' ? 'submarí' : look.extSubj === 'torp' ? 'últim torpede' : 'blanc'} [V canviar · arrossegar · roda]`);
+  }
+  $('viewInfo').textContent = info.join('\n');
+}
+
+// ---- instruments ----
+function dialBase(ctx, cx, cy, R, title) {
+  const g = ctx.createRadialGradient(cx, cy - R*0.3, R*0.1, cx, cy, R);
+  g.addColorStop(0, '#2b3029'); g.addColorStop(1, '#141813');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#a88a3e'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = '#8c9a88'; ctx.font = '10px Courier New'; ctx.textAlign = 'center';
+  ctx.fillText(title, cx, cy + R + 11);
+}
+function drawInstr() {
+  const [W, H] = fitCanvas(instr, ictx);
+  const c = ictx; c.clearRect(0, 0, W, H);
+  const R = 62, cy = 70;
+  // brúixola giroscòpica
+  let cx = 72;
+  dialBase(c, cx, cy, R, 'RUMB');
+  c.save(); c.translate(cx, cy);
+  for (let a = 0; a < 360; a += 5) {
+    const ang = (a - sub.hdg)*D2R;
+    const big = a % 30 === 0;
+    c.strokeStyle = big ? '#e8e0c0' : '#9aa090'; c.lineWidth = big ? 1.6 : 1;
+    c.beginPath(); c.moveTo(Math.sin(ang)*(R - 4), -Math.cos(ang)*(R - 4)); c.lineTo(Math.sin(ang)*(R - (big ? 13 : 8)), -Math.cos(ang)*(R - (big ? 13 : 8))); c.stroke();
+    if (big) { c.fillStyle = a === 0 ? '#ff7060' : '#e8e0c0'; c.font = '10px Courier New'; const lab = a === 0 ? 'N' : a === 90 ? 'E' : a === 180 ? 'S' : a === 270 ? 'W' : String(a/10); c.fillText(lab, Math.sin(ang)*(R - 22), -Math.cos(ang)*(R - 22) + 4); }
+  }
+  const oa = angDiff(sub.ordHdg, sub.hdg)*D2R;
+  c.fillStyle = '#ff5040'; c.beginPath(); c.moveTo(Math.sin(oa)*(R - 2), -Math.cos(oa)*(R - 2));
+  c.lineTo(Math.sin(oa - 0.08)*(R + 7), -Math.cos(oa - 0.08)*(R + 7)); c.lineTo(Math.sin(oa + 0.08)*(R + 7), -Math.cos(oa + 0.08)*(R + 7)); c.fill();
+  c.strokeStyle = '#ffd060'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -R + 2); c.lineTo(0, -R + 18); c.stroke();
+  c.fillStyle = '#ffe9a8'; c.font = 'bold 17px Courier New'; c.fillText(f3(sub.hdg) + '°', 0, 6);
+  c.font = '10px Courier New'; c.fillStyle = '#8c9a88'; c.fillText('tim ' + (sub.rudder >= 0 ? 'E' : 'B') + Math.abs(Math.round(sub.rudder)) + '°', 0, 22);
+  c.restore();
+  // profundímetre
+  cx = 218;
+  dialBase(c, cx, cy, R, 'PROFUNDITAT (m)');
+  c.save(); c.translate(cx, cy);
+  const dA = v => (-135 + clamp(v, 0, 250)/250*270)*D2R;
+  c.strokeStyle = 'rgba(208,69,58,.8)'; c.lineWidth = 6; c.beginPath(); c.arc(0, 0, R - 7, dA(220) - Math.PI/2, dA(250) - Math.PI/2); c.stroke();
+  c.strokeStyle = 'rgba(90,150,200,.7)'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R - 7, dA(LAYER - 3) - Math.PI/2, dA(LAYER + 3) - Math.PI/2); c.stroke();
+  for (let v = 0; v <= 250; v += 10) {
+    const a = dA(v), big = v % 50 === 0;
+    c.strokeStyle = big ? '#e8e0c0' : '#9aa090'; c.lineWidth = big ? 1.6 : 1;
+    c.beginPath(); c.moveTo(Math.sin(a)*(R - 4), -Math.cos(a)*(R - 4)); c.lineTo(Math.sin(a)*(R - (big ? 13 : 8)), -Math.cos(a)*(R - (big ? 13 : 8))); c.stroke();
+    if (big) { c.fillStyle = '#e8e0c0'; c.font = '10px Courier New'; c.fillText(v, Math.sin(a)*(R - 22), -Math.cos(a)*(R - 22) + 4); }
+  }
+  const oda = dA(Math.max(0, sub.ordDepth - SURF));
+  c.fillStyle = '#ff5040'; c.beginPath(); c.arc(Math.sin(oda)*(R - 4), -Math.cos(oda)*(R - 4), 3.5, 0, Math.PI*2); c.fill();
+  const na = dA(Math.max(0, sub.depth - SURF));
+  c.strokeStyle = '#ffe9a8'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.sin(na)*(R - 10), -Math.cos(na)*(R - 10)); c.stroke();
+  c.fillStyle = '#a88a3e'; c.beginPath(); c.arc(0, 0, 4, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#ffe9a8'; c.font = 'bold 15px Courier New';
+  c.fillText(sub.depth <= SURF + 0.4 ? 'SUPERF' : sub.depth.toFixed(1), 0, 30);
+  c.font = '10px Courier New'; c.fillStyle = '#8c9a88'; c.fillText((sub.vz >= 0 ? '↓' : '↑') + Math.abs(sub.vz).toFixed(2) + ' m/s', 0, 44);
+  c.restore();
+  // velocitat
+  cx = 364;
+  dialBase(c, cx, cy, R, 'VELOCITAT (nusos)');
+  c.save(); c.translate(cx, cy);
+  const sA = v => (-135 + clamp(v, 0, 20)/20*270)*D2R;
+  for (let v = 0; v <= 20; v += 1) {
+    const a = sA(v), big = v % 5 === 0;
+    c.strokeStyle = big ? '#e8e0c0' : '#9aa090'; c.lineWidth = big ? 1.6 : 1;
+    c.beginPath(); c.moveTo(Math.sin(a)*(R - 4), -Math.cos(a)*(R - 4)); c.lineTo(Math.sin(a)*(R - (big ? 13 : 8)), -Math.cos(a)*(R - (big ? 13 : 8))); c.stroke();
+    if (big) { c.fillStyle = '#e8e0c0'; c.font = '10px Courier New'; c.fillText(v, Math.sin(a)*(R - 22), -Math.cos(a)*(R - 22) + 4); }
+  }
+  const kn = sub.v/KN;
+  const va = sA(Math.abs(kn));
+  c.strokeStyle = kn < 0 ? '#ff7060' : '#ffe9a8'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.sin(va)*(R - 10), -Math.cos(va)*(R - 10)); c.stroke();
+  c.fillStyle = '#a88a3e'; c.beginPath(); c.arc(0, 0, 4, 0, Math.PI*2); c.fill();
+  c.fillStyle = '#ffe9a8'; c.font = 'bold 15px Courier New'; c.fillText(kn.toFixed(1), 0, 30);
+  c.font = '10px Courier New'; c.fillStyle = sub.diesel ? '#e0b040' : '#79c37c'; c.fillText(sub.diesel ? 'DIÈSEL' : 'E-MOTOR', 0, 44);
+  c.restore();
+}
+
+// ---- carta ----
+const mapS = { cx: 2500, cy: 500, scale: 12, follow: true, drag: null };
+function m2s(x, y, W, H) { return [W/2 + (x - mapS.cx)/mapS.scale, H/2 - (y - mapS.cy)/mapS.scale]; }
+function drawMap() {
+  const [W, H] = fitCanvas(mapCv, mctx); const c = mctx;
+  if (mapS.follow) { mapS.cx = sub.x; mapS.cy = sub.y; }
+  c.fillStyle = '#d6cfae'; c.fillRect(0, 0, W, H);
+  // quadrícula
+  const gs = mapS.scale > 30 ? 5000 : 1000;
+  c.strokeStyle = 'rgba(80,90,110,.35)'; c.lineWidth = 1; c.font = '10px Courier New'; c.fillStyle = 'rgba(60,70,90,.8)'; c.textAlign = 'left';
+  const x0 = mapS.cx - W/2*mapS.scale, x1 = mapS.cx + W/2*mapS.scale, y0 = mapS.cy - H/2*mapS.scale, y1 = mapS.cy + H/2*mapS.scale;
+  for (let x = Math.floor(x0/gs)*gs; x <= x1; x += gs) { const [sx] = m2s(x, 0, W, H); c.beginPath(); c.moveTo(sx, 0); c.lineTo(sx, H); c.stroke(); c.fillText((x/1000) + ' km', sx + 2, H - 180); }
+  for (let y = Math.floor(y0/gs)*gs; y <= y1; y += gs) { const [, sy] = m2s(0, y, W, H); c.beginPath(); c.moveTo(0, sy); c.lineTo(W, sy); c.stroke(); c.fillText((y/1000) + ' km', 4, sy - 2); }
+  // punts de ruta
+  const wp = (p, lab, col) => { const [sx, sy] = m2s(p.x, p.y, W, H); c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.arc(sx, sy, 8, 0, Math.PI*2); c.stroke(); c.fillStyle = col; c.font = 'bold 13px Courier New'; c.fillText(lab, sx + 11, sy - 8); };
+  wp(WP_A, 'A', M.stage === 0 ? '#b03020' : '#6a6a5a');
+  wp(BASE, 'H (base)', M.stage === 5 ? '#b03020' : '#6a6a5a');
+  // traçat propi
+  c.strokeStyle = 'rgba(40,40,40,.6)'; c.setLineDash([3, 3]); c.beginPath();
+  sub.track.forEach((p, i) => { const [sx, sy] = m2s(p.x, p.y, W, H); i ? c.lineTo(sx, sy) : c.moveTo(sx, sy); });
+  const [ssx, ssy] = m2s(sub.x, sub.y, W, H); c.lineTo(ssx, ssy); c.stroke(); c.setLineDash([]);
+  // cercles de distància
+  c.strokeStyle = 'rgba(40,60,90,.25)';
+  for (const r of [1000, 2000, 5000]) { c.beginPath(); c.arc(ssx, ssy, r/mapS.scale, 0, Math.PI*2); c.stroke(); }
+  // hidròfon
+  if (sub.depth > SURF + 1) {
+    for (const h of hydroContacts) {
+      const d = dirv(h.brg); const L = 9000/mapS.scale;
+      c.strokeStyle = `rgba(30,80,160,${clamp(h.I*0.4, 0.15, 0.7)})`; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(ssx, ssy); c.lineTo(ssx + d.x*L, ssy - d.y*L); c.stroke();
+    }
+  }
+  // vaixells
+  for (const s of ships) {
+    if (s.sunk && !settings.mapAll) continue;
+    let p = null, ghost = false;
+    if (settings.mapAll) p = { x: s.x, y: s.y, hdg: s.hdg };
+    else if (s.known) { p = s.known; ghost = simT - s.known.t > 3; }
+    if (!p) continue;
+    const [sx, sy] = m2s(p.x, p.y, W, H);
+    c.save(); c.translate(sx, sy); c.rotate(p.hdg*D2R);
+    const len = Math.max(10, s.C.L/mapS.scale), wd = Math.max(4, s.C.B/mapS.scale);
+    c.fillStyle = s.sinking || s.sunk ? '#555' : (s.ai ? '#a02020' : '#2a2a2a'); c.globalAlpha = ghost ? 0.45 : 1;
+    c.beginPath(); c.moveTo(0, -len/2); c.lineTo(wd/2, -len/4); c.lineTo(wd/2, len/2); c.lineTo(-wd/2, len/2); c.lineTo(-wd/2, -len/4); c.closePath(); c.fill();
+    c.restore(); c.globalAlpha = 1;
+    c.fillStyle = '#222'; c.font = '11px Courier New';
+    c.fillText(`${s.spotted || settings.mapAll ? s.name : '?'}${ghost ? ` (fa ${Math.round((simT - p.t)/60)} min)` : ''}`, sx + 10, sy + 4);
+  }
+  // marques i solució TDC
+  for (const m of tdc.marks) { const [sx, sy] = m2s(m.x, m.y, W, H); c.strokeStyle = '#b03020'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(sx - 4, sy - 4); c.lineTo(sx + 4, sy + 4); c.moveTo(sx + 4, sy - 4); c.lineTo(sx - 4, sy + 4); c.stroke(); }
+  const tp = tdcNow();
+  if (tp) {
+    const [sx, sy] = m2s(tp.x, tp.y, W, H);
+    c.strokeStyle = '#c06010'; c.lineWidth = 1.5; c.beginPath(); c.arc(sx, sy, 7, 0, Math.PI*2); c.stroke();
+    const d = dirv(tdc.course), L = tdc.speed*KN*300/mapS.scale;
+    c.setLineDash([6, 4]); c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx + d.x*L, sy - d.y*L); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#c06010'; c.fillText('TDC', sx + 9, sy - 9);
+    const tb = sub.tubes[sub.selTube];
+    const s = solveFiring(tb, tb.type || 'G7e', 0);
+    if (s.aim) { const [ax, ay] = m2s(s.aim.x, s.aim.y, W, H); c.strokeStyle = s.ok ? 'rgba(20,120,40,.8)' : 'rgba(180,40,20,.7)'; c.setLineDash([2, 4]); c.beginPath(); c.moveTo(ssx, ssy); c.lineTo(ax, ay); c.stroke(); c.setLineDash([]); c.beginPath(); c.arc(ax, ay, 4, 0, Math.PI*2); c.stroke(); }
+  }
+  // torpedes
+  for (const t of torps) { const [sx, sy] = m2s(t.x, t.y, W, H); c.fillStyle = '#1050c0'; c.beginPath(); c.arc(sx, sy, 3, 0, Math.PI*2); c.fill(); }
+  for (const ch of charges) { const [sx, sy] = m2s(ch.x, ch.y, W, H); c.fillStyle = '#c02020'; c.fillRect(sx - 2, sy - 2, 4, 4); }
+  // submarí
+  c.save(); c.translate(ssx, ssy); c.rotate(sub.hdg*D2R);
+  c.fillStyle = '#0a4a20'; c.beginPath(); c.moveTo(0, -11); c.lineTo(5, 7); c.lineTo(-5, 7); c.closePath(); c.fill();
+  const od = angDiff(sub.ordHdg, sub.hdg)*D2R; c.strokeStyle = 'rgba(10,74,32,.6)'; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.sin(od)*40, -Math.cos(od)*40); c.stroke();
+  c.restore();
+  // escala
+  const hx = Math.max(350, W/2 - 330);
+  c.fillStyle = 'rgba(214,207,174,.92)'; c.fillRect(hx - 6, 44, 640, 44);
+  c.fillStyle = '#222'; c.font = '12px Courier New';
+  c.fillText(`CARTA — 1 px = ${mapS.scale.toFixed(1)} m · Clic dret: posar rumb · Arrossegar: moure · Roda: zoom · K/doble clic: centrar`, hx, 62);
+  c.fillText(`Posició U-boot: ${(sub.x/1000).toFixed(2)} km E, ${(sub.y/1000).toFixed(2)} km N · Rumb ${f3(sub.hdg)}° · Seguiment: ${mapS.follow ? 'sí' : 'no'}`, hx, 80);
+}
+
+// ---- hidròfon ----
+function drawHydro() {
+  const [W, H] = fitCanvas(hydroCv, hctx); const c = hctx; const cx = W/2, cy = H/2, R = Math.min(W, H)/2 - 14;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = '#0f1410'; c.beginPath(); c.arc(cx, cy, R, 0, Math.PI*2); c.fill();
+  c.strokeStyle = '#a88a3e'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = 'rgba(120,40,30,.35)';
+  c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, R, (155 - 90)*D2R, (205 - 90)*D2R); c.closePath(); c.fill();
+  c.font = '10px Courier New'; c.textAlign = 'center';
+  for (let a = 0; a < 360; a += 10) {
+    const ang = a*D2R, big = a % 30 === 0;
+    c.strokeStyle = '#7a8a78'; c.beginPath(); c.moveTo(cx + Math.sin(ang)*R, cy - Math.cos(ang)*R); c.lineTo(cx + Math.sin(ang)*(R - (big ? 9 : 5)), cy - Math.cos(ang)*(R - (big ? 9 : 5))); c.stroke();
+    if (big) { c.fillStyle = '#b8c0a8'; c.fillText(a, cx + Math.sin(ang)*(R + 8), cy - Math.cos(ang)*(R + 8) + 3); }
+  }
+  c.fillStyle = '#b8c0a8'; c.fillText('proa', cx, cy - R + 20);
+  const surf = sub.depth <= SURF + 1;
+  for (const h of hydroContacts) {
+    const rel = angDiff(h.brg, sub.hdg)*D2R;
+    const len = clamp(h.I, 0.1, 3)/3*(R - 16);
+    c.strokeStyle = h.lab.includes('torpede') ? '#ff6040' : h.lab.includes('RÀPIDES') ? '#ffa040' : '#79c37c';
+    c.lineWidth = 3;
+    c.beginPath(); c.moveTo(cx + Math.sin(rel)*(R - 14 - len), cy - Math.cos(rel)*(R - 14 - len)); c.lineTo(cx + Math.sin(rel)*(R - 12), cy - Math.cos(rel)*(R - 12)); c.stroke();
+  }
+  c.fillStyle = '#ffe9a8'; c.font = '11px Courier New';
+  c.fillText(surf ? 'En superfície: sensibilitat reduïda' : `Soroll propi: ${subNoise() < 0.5 ? 'baix' : subNoise() < 1 ? 'moderat' : 'alt'}`, cx, cy + 4);
+  const items = hydroContacts.slice().sort((a, b) => b.I - a.I).slice(0, 4).map(h =>
+    `${f3(h.brg)}° · ${h.I < 0.3 ? 'feble' : h.I < 1 ? 'moderat' : 'fort'} · ${h.lab}`);
+  $('hydroList').innerHTML = items.length ? items.join('<br>') : '<span class="note">Cap soroll audible.</span>';
+}
+
+/* =========================================================================
+   TDC — interfície
+   ========================================================================= */
+function buildTdcPanel() {
+  $('tdc').innerHTML = `
+    <h3>VORHALTRECHNER — TDC</h3>
+    <div class="tg">
+      <span>Demora del blanc</span><button data-tk="brg" data-st="-1">−</button><input id="tBrg"><button data-tk="brg" data-st="1">+</button>
+      <span>Distància (m)</span><button data-tk="rng" data-st="-100">−</button><input id="tRng"><button data-tk="rng" data-st="100">+</button>
+      <span>Rumb del blanc</span><button data-tk="crs" data-st="-5">−</button><input id="tCrs"><button data-tk="crs" data-st="5">+</button>
+      <span>Velocitat (kn)</span><button data-tk="spd" data-st="-0.5">−</button><input id="tSpd"><button data-tk="spd" data-st="0.5">+</button>
+      <span>AoB (angle proa)</span><button data-tk="aob" data-st="-5">−</button><span class="ro" id="tAob">—</span><button data-tk="aob" data-st="5">+</button>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+      <button id="tFromScope">Demora òptica [Espai]</button>
+      <button id="tCalc">Calcular de marques</button>
+      <button id="tClr">Esborrar</button>
+    </div>
+    <div id="tMarks" class="note" style="margin-top:4px"></div>
+    <h4>Torpede</h4>
+    <div class="tg">
+      <span>Profunditat (m)</span><button data-tk="dep" data-st="-0.5">−</button><span class="ro" id="tDep"></span><button data-tk="dep" data-st="0.5">+</button>
+      <span>Espoleta</span><span></span><button id="tPistol"></button><span></span>
+      <span>Vel. G7a (kn)</span><span></span><button id="tG7a"></button><span></span>
+      <span>Salva / dispersió</span><button id="tSalvo"></button><button id="tSpread"></button><span></span>
+    </div>
+    <h4>Tubs <span class="note">(1–5 per seleccionar)</span></h4>
+    <div class="tubes" id="tTubes"></div>
+    <h4>Solució</h4>
+    <div id="sol"></div>
+    <button id="tFire" class="red">FOC! [Enter]</button>`;
+  $('tdc').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    AudioSys.click();
+    if (b.dataset.tk) {
+      const st = parseFloat(b.dataset.st), k = b.dataset.tk;
+      const br = tdcBR();
+      if (k === 'brg') tdcSetBR(norm360((br ? br.brg : sub.hdg) + st), br ? br.rng : 2000);
+      if (k === 'rng') tdcSetBR(br ? br.brg : sub.hdg, clamp((br ? br.rng : 2000) + st, 100, 20000));
+      if (k === 'crs') { if (br) { tdc.x = br.p.x; tdc.y = br.p.y; tdc.t = simT; } tdc.course = norm360(tdc.course + st); }
+      if (k === 'spd') { if (br) { tdc.x = br.p.x; tdc.y = br.p.y; tdc.t = simT; } tdc.speed = clamp(tdc.speed + st, 0, 35); }
+      if (k === 'aob') { const a = tdcAoB(); if (a !== null) tdcSetAoB(clamp(a + st, -180, 180)); }
+      if (k === 'dep') tdc.depth = clamp(tdc.depth + st, 1, 12);
+      tdc.lock = settings.assist ? tdc.lock : null;
+      updateTdcPanel(true);
+    }
+    if (b.id === 'tFromScope') sendBearing();
+    if (b.id === 'tCalc') calcFromMarks();
+    if (b.id === 'tClr') { tdc.marks = []; tdc.valid = false; tdc.lock = null; tdc.speed = 0; tdc.course = 0; msg('TDC esborrat.'); updateTdcPanel(true); }
+    if (b.id === 'tPistol') { tdc.pistol = tdc.pistol === 'contact' ? 'magnetic' : 'contact'; updateTdcPanel(true); }
+    if (b.id === 'tG7a') { tdc.g7aSpeed = tdc.g7aSpeed === 44 ? 30 : tdc.g7aSpeed === 30 ? 40 : 44; updateTdcPanel(true); }
+    if (b.id === 'tSalvo') { tdc.salvo = tdc.salvo >= 4 ? 1 : tdc.salvo + 1; updateTdcPanel(true); }
+    if (b.id === 'tSpread') { tdc.spread = tdc.spread >= 6 ? 1 : tdc.spread + 1; updateTdcPanel(true); }
+    if (b.id === 'tFire') fireCommand();
+    const tbe = e.target.closest('.tube'); if (tbe) { sub.selTube = +tbe.dataset.i; updateTdcPanel(true); }
+  });
+  $('tTubes').addEventListener('click', e => { const tbe = e.target.closest('.tube'); if (tbe) { sub.selTube = +tbe.dataset.i; AudioSys.click(); updateTdcPanel(true); } });
+  const bindInput = (id, fn) => $(id).addEventListener('change', e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) fn(v); tdc.lock = settings.assist ? tdc.lock : null; updateTdcPanel(true); e.target.blur(); });
+  bindInput('tBrg', v => { const br = tdcBR(); tdcSetBR(norm360(v), br ? br.rng : 2000); });
+  bindInput('tRng', v => { const br = tdcBR(); tdcSetBR(br ? br.brg : sub.hdg, clamp(v, 100, 20000)); });
+  bindInput('tCrs', v => { const br = tdcBR(); if (br) { tdc.x = br.p.x; tdc.y = br.p.y; tdc.t = simT; } tdc.course = norm360(v); });
+  bindInput('tSpd', v => { const br = tdcBR(); if (br) { tdc.x = br.p.x; tdc.y = br.p.y; tdc.t = simT; } tdc.speed = clamp(v, 0, 35); });
+}
+let tdcUiT = 0;
+function updateTdcPanel(force = false) {
+  if (!showTdc) return;
+  tdcUiT -= 1;
+  if (!force && tdcUiT > 0) return;
+  tdcUiT = 6;
+  const br = tdcBR();
+  const setIn = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
+  setIn('tBrg', br ? f3(br.brg) : '—');
+  setIn('tRng', br ? Math.round(br.rng) : '—');
+  setIn('tCrs', tdc.valid ? f3(tdc.course) : '—');
+  setIn('tSpd', tdc.valid ? tdc.speed.toFixed(1) : '—');
+  const a = tdcAoB();
+  $('tAob').textContent = a === null ? '—' : `${Math.abs(Math.round(a))}° ${a >= 0 ? 'estribord' : 'babord'}`;
+  $('tDep').textContent = tdc.depth.toFixed(1);
+  $('tPistol').textContent = tdc.pistol === 'contact' ? 'Contacte' : 'Magnètica';
+  $('tG7a').textContent = tdc.g7aSpeed + ' kn / ' + TORP.G7a.speeds[tdc.g7aSpeed]/1000 + ' km';
+  $('tSalvo').textContent = tdc.salvo + ' torp.';
+  $('tSpread').textContent = tdc.spread + '°';
+  $('tMarks').textContent = `Marques: ${tdc.marks.length}${tdc.marks.length ? ` (última fa ${Math.round(simT - tdc.marks[tdc.marks.length - 1].t)} s)` : ''}${tdc.lock && settings.assist ? ` · Fixat: ${tdc.lock.name}` : ''}${tdc.idClass ? ` · Classe: ${CLASSES[tdc.idClass].name}` : ''}`;
+  $('tTubes').innerHTML = sub.tubes.map((t, i) => {
+    let st;
+    if (t.type) st = `<span class="st-ok">${t.type} · LLEST</span>`;
+    else {
+      const rl = t.stern ? sub.reloadStern : sub.reloadBow;
+      st = rl && rl.tube === i ? `<span class="st-rl">recarregant ${rl.type} ${Math.round(rl.t/RELOAD_TIME*100)}%</span>` : '<span class="st-em">buit</span>';
+    }
+    return `<div class="tube ${i === sub.selTube ? 'sel' : ''}" data-i="${i}"><span>Tub ${t.id} ${t.stern ? '(popa)' : '(proa)'}</span>${st}</div>`;
+  }).join('') + `<div class="note">Reserva: proa ${sub.reserveBow.length} · popa ${sub.reserveStern.length}</div>`;
+  const tb = sub.tubes[sub.selTube];
+  const type = tb.type || 'G7e';
+  const s = solveFiring(tb, type, 0);
+  if (!tdc.valid) $('sol').innerHTML = `<span class="note">Sense dades del blanc. Un tret ara aniria recte (angle giroscòpic 0°).</span>`;
+  else $('sol').innerHTML = `
+    Angle giroscòpic: <b>${s.gyro >= 0 ? '+' : ''}${s.gyro.toFixed(1)}°</b><br>
+    Recorregut: <b>${s.runDist ? Math.round(s.runDist) + ' m' : '—'}</b> · Temps: <b>${s.runTime ? Math.round(s.runTime) + ' s' : '—'}</b><br>
+    Torpede: <b>${type} ${s.spec.kn} kn</b>, abast ${s.spec.range/1000} km<br>
+    Estat: <b style="color:${s.ok ? '#79c37c' : '#ff7060'}">${s.reason}</b>`;
+}
+function sendBearing() {
+  if (view !== 'periscope' && view !== 'bridge') { msg('Cal estar al periscopi o al pont per prendre una demora.', 'warn'); return; }
+  if (view === 'periscope' && !periHead().above) { msg('El periscopi no és fora de l\'aigua.', 'warn'); return; }
+  const b = opticBearing(); const br = tdcBR();
+  tdcSetBR(b, br ? br.rng : 2000);
+  if (!settings.assist) tdc.lock = null;
+  msg(`Demora ${f3(b)}° enviada al TDC.`);
+  updateTdcPanel(true);
+}
+function stadiSend() {
+  const C = tdc.idClass ? CLASSES[tdc.idClass] : null;
+  if (!C) { msg('Primer identifiqueu el blanc amb el manual de reconeixement (I).', 'warn'); return; }
+  if (view === 'periscope' && !periHead().above) { msg('El periscopi no és fora de l\'aigua.', 'warn'); return; }
+  const H = window.innerHeight; const fpx = (H/2)/Math.tan(camera.fov*D2R/2);
+  const alpha = Math.atan(stadi.y/fpx);
+  const rng = clamp((C.mast - camera.position.y)/Math.tan(Math.max(alpha, 1e-5)), 50, 20000);
+  const b = opticBearing();
+  tdcSetBR(b, rng);
+  if (!settings.assist) tdc.lock = null;
+  const d = dirv(b);
+  tdc.marks.push({ t: simT, x: sub.x + d.x*rng, y: sub.y + d.y*rng });
+  if (tdc.marks.length > 8) tdc.marks.shift();
+  msg(`Marca ${tdc.marks.length}: demora ${f3(b)}°, distància ${Math.round(rng)} m.`);
+  stadi.on = false;
+  if (tdc.marks.length >= 2) calcFromMarks(true);
+  updateTdcPanel(true);
+}
+function calcFromMarks(auto = false) {
+  const mk = tdc.marks;
+  if (mk.length < 2) { if (!auto) msg('Calen almenys dues marques.', 'warn'); return; }
+  const last = mk[mk.length - 1];
+  let first = null;
+  for (let i = mk.length - 2; i >= 0; i--) if (last.t - mk[i].t >= 30) { first = mk[i]; if (last.t - mk[i].t >= 120) break; }
+  if (!first) { if (!auto) msg('Les marques han d\'estar separades almenys 30 s (millor 60–120 s).', 'warn'); else msg('Calen marques separades almenys 30 s per calcular el moviment.'); return; }
+  // regressió lineal sobre les marques dins de la finestra
+  const sel = mk.filter(m => m.t >= first.t);
+  const n = sel.length, mt = sel.reduce((a, m) => a + m.t, 0)/n, mx = sel.reduce((a, m) => a + m.x, 0)/n, my = sel.reduce((a, m) => a + m.y, 0)/n;
+  let sxx = 0, sxt = 0, syt = 0;
+  for (const m of sel) { sxx += (m.t - mt)**2; sxt += (m.t - mt)*(m.x - mx); syt += (m.t - mt)*(m.y - my); }
+  const vx = sxt/sxx, vy = syt/sxx;
+  const kn = Math.hypot(vx, vy)/KN;
+  tdc.x = mx + vx*(last.t - mt); tdc.y = my + vy*(last.t - mt); tdc.t = last.t; tdc.valid = true;
+  if (kn < 0.7) { tdc.speed = 0; msg(`TDC: blanc aparentment immòbil (${kn.toFixed(1)} kn). Velocitat posada a 0.`); }
+  else { tdc.speed = Math.round(kn*2)/2; tdc.course = norm360(Math.atan2(vx, vy)*R2D); msg(`TDC: rumb del blanc ${f3(tdc.course)}°, velocitat ${tdc.speed.toFixed(1)} kn (${n} marques, ${Math.round(last.t - first.t)} s).`); }
+  updateTdcPanel(true);
+}
+
+/* =========================================================================
+   MANUAL DE RECONEIXEMENT
+   ========================================================================= */
+function drawSil(cv, C) {
+  const c = cv.getContext('2d'), W = cv.width, H = cv.height;
+  c.clearRect(0, 0, W, H);
+  const sc = (W - 20)/C.L, base = H - 14;
+  const X = z => W/2 + z*sc, Y = y => base - y*sc;
+  const deck = C.H - C.draft;
+  c.fillStyle = 'rgba(40,60,90,.3)'; c.fillRect(0, base, W, 14);
+  c.fillStyle = '#222';
+  c.beginPath(); c.moveTo(X(-C.L/2), Y(deck + C.L*0.018)); c.lineTo(X(C.L/2), Y(deck + 0.4)); c.lineTo(X(C.L/2 - 3), Y(-C.draft*0.3)); c.lineTo(X(-C.L/2 + 6), Y(-C.draft*0.3)); c.closePath(); c.fill();
+  for (const p of C.parts) {
+    if (p.t === 'box') c.fillRect(X(p.z*C.L - p.len/2), Y(deck + p.y0 + p.h), p.len*sc, p.h*sc);
+    if (p.t === 'funnel') c.fillRect(X(p.z*C.L - p.r), Y(deck + p.y0 + p.h), p.r*2*sc, p.h*sc);
+    if (p.t === 'mast') { c.fillRect(X(p.z*C.L) - 1, Y(p.top), 2, (p.top - deck)*sc); }
+  }
+  c.strokeStyle = '#b03020'; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(0, Y(C.mast)); c.lineTo(W, Y(C.mast)); c.stroke(); c.setLineDash([]);
+}
+function buildRec() {
+  $('recList').innerHTML = Object.entries(CLASSES).map(([k, C]) => `
+    <div class="recItem ${tdc.idClass === k ? 'sel' : ''}" data-k="${k}">
+      <canvas width="260" height="70"></canvas>
+      <div class="d"><b>${C.name}</b> — ${C.grt}<br>Eslora ${C.L} m · Mànega ${C.B} m · Calat ${C.draft} m<br><b>Alçada del pal: ${C.mast} m</b> · Vel. màx. ${C.maxKn} kn</div>
+      <button>Seleccionar</button>
+    </div>`).join('');
+  document.querySelectorAll('#recList .recItem').forEach(el => drawSil(el.querySelector('canvas'), CLASSES[el.dataset.k]));
+}
+$('recList').addEventListener('click', e => {
+  const it = e.target.closest('.recItem'); if (!it) return;
+  tdc.idClass = it.dataset.k; AudioSys.click();
+  msg(`Blanc identificat com a: ${CLASSES[tdc.idClass].name} (pal ${CLASSES[tdc.idClass].mast} m).`);
+  buildRec(); $('rec').classList.add('hidden'); updateTdcPanel(true);
+});
+
+/* =========================================================================
+   ENTRADA
+   ========================================================================= */
+function toggleTdc() { showTdc = !showTdc; document.body.classList.toggle('tdcOpen', showTdc); $('tdc').classList.toggle('hidden', !showTdc); $('tabTdc').classList.toggle('on', showTdc); updateTdcPanel(true); }
+function toggleHydro() { showHydro = !showHydro; document.body.classList.toggle('hydroOpen', showHydro); $('hydro').classList.toggle('hidden', !showHydro); $('tabHydro').classList.toggle('on', showHydro); }
+function toggleRec() { const r = $('rec'); if (r.classList.contains('hidden')) { buildRec(); r.classList.remove('hidden'); } else r.classList.add('hidden'); }
+function setPause(p) {
+  paused = p; $('btnPause').textContent = p ? 'Continuar [Esc]' : 'Pausa [Esc]'; $('btnPause').classList.toggle('on', p);
+}
+function setTele(i) {
+  i = clamp(i, 0, TELE.length - 1); if (i === sub.tele) return;
+  sub.tele = i; AudioSys.click();
+  document.querySelectorAll('#tele button').forEach(b => b.classList.toggle('on', +b.dataset.t === i));
+  msg(`Telègraf: ${TELE[i].n}.`);
+}
+function setOrdHdg(h) { sub.ordHdg = norm360(Math.round(h)); $('ordHdg').textContent = f3(sub.ordHdg) + '°'; }
+function setOrdDepth(d, alarm = false) {
+  d = clamp(d, SURF, 230);
+  if (d < SURF + 1) d = SURF;
+  sub.ordDepth = d; sub.alarm = alarm && d > SURF;
+  $('ordDepth').textContent = d <= SURF ? 'SUPERFÍCIE' : Math.round(d) + ' m';
+}
+function alarmDive() {
+  AudioSys.bell(); msg('ALARM! Tothom a proa! Immersió ràpida!', 'warn', true);
+  setOrdDepth(40, true);
+  if (sub.tele < 5) setTele(5);
+  if (view === 'bridge') setView('periscope');
+}
+function surface() {
+  setOrdDepth(SURF); sub.alarm = false; msg('Anblasen! Buidant llasts, emergim.');
+  sub.periUp = false;
+}
+function scopeToggle() {
+  sub.periUp = !sub.periUp; AudioSys.click();
+  msg(sub.periUp ? 'Alçant el periscopi.' : 'Abaixant el periscopi.');
+}
+
+window.addEventListener('keydown', e => {
+  if (!started) return;
+  if (e.target.tagName === 'INPUT') return;
+  const k = e.key, K = k.toLowerCase(), sh = e.shiftKey;
+  if (k === 'Escape') {
+    if (!$('rec').classList.contains('hidden')) { $('rec').classList.add('hidden'); return; }
+    if (!$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); setPause(false); return; }
+    if (stadi.on) { stadi.on = false; return; }
+    setPause(!paused); return;
+  }
+  if (k === 'F1' || k === '?') { e.preventDefault(); $('help').classList.remove('hidden'); setPause(true); return; }
+  if (M.ended) return;
+  if (stadi.on && (k === 'ArrowUp' || k === 'ArrowDown')) { stadi.y = clamp(stadi.y + (k === 'ArrowUp' ? 1 : -1)*(sh ? 0.25 : 2), 0.3, window.innerHeight*0.45); e.preventDefault(); return; }
+  if (k === 'Enter') { e.preventDefault(); if (stadi.on) stadiSend(); else fireCommand(); return; }
+  if (k === ' ') { e.preventDefault(); sendBearing(); return; }
+  switch (K) {
+    case 'w': setTele(sub.tele + 1); break;
+    case 's': setTele(sub.tele - 1); break;
+    case 'a': setOrdHdg(sub.ordHdg - (sh ? 1 : 5)); break;
+    case 'd': setOrdHdg(sub.ordHdg + (sh ? 1 : 5)); break;
+    case 'r': setOrdDepth(Math.max(SURF, (sub.ordDepth <= SURF ? sub.depth : sub.ordDepth) - (sh ? 1 : 5))); break;
+    case 'f': setOrdDepth((sub.ordDepth <= SURF ? Math.max(sub.depth, 5) : sub.ordDepth) + (sh ? 1 : 5)); break;
+    case 'c': alarmDive(); break;
+    case 'g': setOrdDepth(PERI_DEPTH); msg('Cota periscòpica, 13 m.'); break;
+    case 'n': surface(); break;
+    case 'q': sub.silent = !sub.silent; $('bSilent').classList.toggle('on', sub.silent); msg(sub.silent ? 'Marxa silenciosa! Ventilació aturada, sense sorolls.' : 'Fi de la marxa silenciosa.'); break;
+    case 'u': scopeToggle(); break;
+    case 'b': setView('bridge'); break;
+    case 'p': setView('periscope'); break;
+    case 'e': setView('external'); break;
+    case 'm': setView(view === 'map' ? (sub.depth <= SURF + 1 ? 'bridge' : 'periscope') : 'map'); break;
+    case 't': toggleTdc(); break;
+    case 'h': toggleHydro(); break;
+    case 'i': toggleRec(); break;
+    case 'z': if (view === 'periscope') look.scopeZoom = !look.scopeZoom; else if (view === 'bridge') look.binoZoom = !look.binoZoom; break;
+    case 'x':
+      if (view === 'periscope' || (view === 'bridge' && look.binoZoom)) { stadi.on = !stadi.on; if (stadi.on && !tdc.idClass) msg('Identifiqueu el blanc (I) per saber l\'alçada del pal.', 'warn'); }
+      else msg('L\'estadímetre només funciona al periscopi o amb els prismàtics (Z).', 'warn');
+      break;
+    case 'l':
+      if (!settings.assist) { msg('Assistència desactivada: preneu les dades amb l\'estadímetre i les marques.', 'warn'); break; }
+      { let best = null, bd = 1e9; const b0 = opticBearing();
+        for (const s of ships) { if (s.sunk || !s.spotted) continue; const a = Math.abs(angDiff(brgTo(sub.x, sub.y, s.x, s.y), b0)); if (a < bd) { bd = a; best = s; } }
+        if (best && bd < 15) { tdc.lock = best; tdc.idClass = best.cls; msg(`Blanc fixat: ${best.name}.`); } else msg('Cap blanc avistat a prop de la retícula.', 'warn'); }
+      break;
+    case 'v': look.extSubj = look.extSubj === 'sub' ? 'torp' : look.extSubj === 'torp' ? 'target' : 'sub'; break;
+    case 'k': if (view === 'map') { mapS.follow = !mapS.follow; } break;
+    case '1': case '2': case '3': case '4': case '5': sub.selTube = +k - 1; msg(`Tub ${k} seleccionat${sub.tubes[+k - 1].type ? ` (${sub.tubes[+k - 1].type})` : ' (buit)'}.`); updateTdcPanel(true); break;
+    case '+': case '=': case ']': setTC(tcIdx + 1); break;
+    case '-': case '_': case '[': setTC(tcIdx - 1); break;
+  }
+  if (view === 'map' && K === 'c') { /* handled as alarm */ }
+});
+const keysDown = {};
+window.addEventListener('keydown', e => { keysDown[e.key] = true; if (e.key.startsWith('Arrow') && started && e.target.tagName !== 'INPUT') e.preventDefault(); });
+window.addEventListener('keyup', e => { keysDown[e.key] = false; });
+function handleHeldKeys(rdt) {
+  const sh = keysDown.Shift;
+  const sp = (sh ? 3 : 25)*rdt;
+  let d = 0; if (keysDown.ArrowLeft) d -= sp; if (keysDown.ArrowRight) d += sp;
+  if (d) { if (view === 'periscope') look.scopeBrg = norm360(look.scopeBrg + d); else if (view === 'bridge') look.bridgeYaw = norm360(look.bridgeYaw + d*(look.binoZoom ? 1 : 2)); else if (view === 'external') look.extYaw += d*3; }
+  if (!stadi.on && view === 'bridge') { if (keysDown.ArrowUp) look.bridgePitch = clamp(look.bridgePitch + 20*rdt, -40, 30); if (keysDown.ArrowDown) look.bridgePitch = clamp(look.bridgePitch - 20*rdt, -40, 30); }
+}
+
+let drag = null;
+glCanvas.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY }; });
+window.addEventListener('mouseup', () => { drag = null; mapS.drag = null; });
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  const degPerPx = camera.fov/window.innerHeight*(e.shiftKey ? 0.25 : 1);
+  if (view === 'periscope') look.scopeBrg = norm360(look.scopeBrg - dx*degPerPx);
+  else if (view === 'bridge') { look.bridgeYaw = norm360(look.bridgeYaw - dx*degPerPx); if (!stadi.on) look.bridgePitch = clamp(look.bridgePitch + dy*degPerPx, -40, 30); }
+  else if (view === 'external') { look.extYaw -= dx*0.3; look.extPitch = clamp(look.extPitch + dy*0.3, -60, 85); }
+});
+glCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (stadi.on) { stadi.y = clamp(stadi.y + (e.deltaY < 0 ? 1 : -1)*(e.shiftKey ? 0.25 : 1.5), 0.3, window.innerHeight*0.45); return; }
+  if (view === 'external') look.extDist = clamp(look.extDist*(e.deltaY > 0 ? 1.12 : 0.89), 12, 3000);
+}, { passive: false });
+mapCv.addEventListener('mousedown', e => { if (e.button === 0) { mapS.drag = { x: e.clientX, y: e.clientY }; } });
+mapCv.addEventListener('mousemove', e => {
+  if (!mapS.drag) return;
+  mapS.follow = false;
+  mapS.cx -= (e.clientX - mapS.drag.x)*mapS.scale; mapS.cy += (e.clientY - mapS.drag.y)*mapS.scale;
+  mapS.drag = { x: e.clientX, y: e.clientY };
+});
+mapCv.addEventListener('wheel', e => { e.preventDefault(); mapS.scale = clamp(mapS.scale*(e.deltaY > 0 ? 1.15 : 0.87), 0.5, 120); }, { passive: false });
+mapCv.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const W = mapCv.clientWidth, H = mapCv.clientHeight;
+  const x = mapS.cx + (e.clientX - W/2)*mapS.scale, y = mapS.cy - (e.clientY - H/2)*mapS.scale;
+  setOrdHdg(brgTo(sub.x, sub.y, x, y));
+  msg(`Rumb ${f3(sub.ordHdg)}° cap al punt marcat (${(Math.hypot(x - sub.x, y - sub.y)/1000).toFixed(1)} km).`);
+});
+mapCv.addEventListener('dblclick', () => { mapS.follow = true; });
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+});
+
+/* =========================================================================
+   INICIALITZACIÓ DE LA UI
+   ========================================================================= */
+function initUI() {
+  const tele = $('tele');
+  for (let i = TELE.length - 1; i >= 0; i--) {
+    const b = document.createElement('button'); b.dataset.t = i; b.textContent = TELE[i].n;
+    if (i === sub.tele) b.classList.add('on');
+    b.onclick = () => setTele(i); tele.appendChild(b);
+  }
+  document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+  $('tabTdc').onclick = toggleTdc; $('tabHydro').onclick = toggleHydro; $('tabRec').onclick = toggleRec;
+  $('tabHelp').onclick = () => { $('help').classList.remove('hidden'); setPause(true); };
+  $('helpClose').onclick = () => { $('help').classList.add('hidden'); setPause(false); };
+  $('recClose').onclick = () => $('rec').classList.add('hidden');
+  $('tcUp').onclick = () => setTC(tcIdx + 1); $('tcDown').onclick = () => setTC(tcIdx - 1);
+  $('btnPause').onclick = () => setPause(!paused);
+  document.querySelectorAll('[data-hd]').forEach(b => b.onclick = () => setOrdHdg(sub.ordHdg + +b.dataset.hd));
+  document.querySelectorAll('[data-dp]').forEach(b => b.onclick = () => setOrdDepth((sub.ordDepth <= SURF ? Math.max(sub.depth, +b.dataset.dp > 0 ? 5 : SURF) : sub.ordDepth) + +b.dataset.dp));
+  $('bSurf').onclick = surface; $('bAlarm').onclick = alarmDive;
+  $('bPeriD').onclick = () => { setOrdDepth(PERI_DEPTH); msg('Cota periscòpica, 13 m.'); };
+  $('bDeep').onclick = () => setOrdDepth(80); $('bDeep2').onclick = () => setOrdDepth(120);
+  $('bScope').onclick = scopeToggle;
+  $('bSilent').onclick = () => { sub.silent = !sub.silent; $('bSilent').classList.toggle('on', sub.silent); msg(sub.silent ? 'Marxa silenciosa!' : 'Fi de la marxa silenciosa.'); };
+  $('objTitle').onclick = () => { const b = $('objBody'); b.classList.toggle('hidden'); $('objTitle').textContent = (b.classList.contains('hidden') ? '▸' : '▾') + ' Missió d\'entrenament'; };
+  buildTdcPanel();
+}
+let uiT = 0;
+function updateHUD() {
+  $('clock').textContent = clockStr();
+  const bar = (id, v) => { const el = $(id); el.style.width = clamp(v, 0, 100) + '%'; el.style.background = v < 25 ? 'var(--red)' : v < 50 ? 'var(--amber)' : 'var(--green)'; };
+  bar('barBat', sub.battery); bar('barAir', sub.air); bar('barHull', sub.hull);
+  $('sonda').textContent = `${Math.round(SEABED - sub.depth)} m sota la quilla`;
+  const loaded = sub.tubes.filter(t => t.type).length;
+  $('torpCount').textContent = `${loaded}/5 als tubs · ${sub.reserveBow.length + sub.reserveStern.length} reserva`;
+  const modes = [];
+  if (sub.alarm) modes.push('ALARM');
+  if (sub.floodT > 0 && sub.depth <= SURF + 0.5 && sub.ordDepth > SURF) modes.push('INUNDANT');
+  if (sub.ordDepth <= SURF && sub.depth > SURF + 0.4) modes.push('BUIDANT LLASTS');
+  if (sub.silent) modes.push('SILENCI');
+  if (sub.peri > 0.05) modes.push('PERISCOPI ' + (sub.peri >= 0.99 ? 'ALT' : '…'));
+  if (sub.depth > 200) modes.push('PROFUNDITAT CRÍTICA!');
+  if (sub.depth > LAYER) modes.push('sota la termoclina');
+  $('modeLine').textContent = modes.join(' · ');
+  const st = STAGES[M.stage];
+  if (st) $('objHint').textContent = st.hint();
+  if (M.stage === 4) renderObjectives();
+}
+
+/* =========================================================================
+   BUCLE PRINCIPAL
+   ========================================================================= */
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = Math.min(0.1, (now - last)/1000); last = now;
+  if (started && !paused) {
+    const sdt = rdt*TC_STEPS[tcIdx];
+    const n = Math.max(1, Math.ceil(sdt/0.1)), h = sdt/n;
+    for (let i = 0; i < n; i++) step(h);
+  }
+  if (started) handleHeldKeys(rdt);
+  updateVisuals(rdt);
+  updParticles(paused ? 0 : Math.min(rdt*TC_STEPS[tcIdx], 0.5));
+  updateCamera(rdt);
+  if (flashT > 0) { flashT -= rdt; flashLight.intensity = Math.max(0, flashLight.intensity - rdt*12); } else flashLight.intensity = 0;
+  if (flashRed > 0) { flashRed -= rdt; $('redlight').style.opacity = clamp(flashRed, 0, 0.6); } else $('redlight').style.opacity = 0;
+  if (view !== 'map') renderer.render(scene, camera);
+  drawOverlay();
+  if (view === 'map') drawMap();
+  if (started) {
+    drawInstr();
+    if (showHydro) drawHydro();
+    uiT -= rdt; if (uiT <= 0) { uiT = 0.25; updateHUD(); }
+    updateTdcPanel();
+  }
+  AudioSys.update(rdt);
+}
+
+// escena inicial (abans de començar)
+M.hulk = makeShip('tanker', 'HANSA', 5600, 1300, 160, 0);
+setView('bridge');
+look.bridgeYaw = 0;
+$('loading').classList.add('hidden');
+$('start').classList.remove('hidden');
+initUI();
+requestAnimationFrame(frame);
+
+$('go').onclick = () => {
+  settings.assist = $('optAssist').checked;
+  settings.mapAll = $('optMap').checked;
+  settings.sound = $('optSound').checked;
+  AudioSys.init();
+  AudioSys.setMute(!settings.sound);
+  $('start').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  started = true; setPause(false);
+  setOrdHdg(70); setOrdDepth(SURF);
+  stageStart(0);
+  msg('Herr Kaleun, el vaixell és a punt. Dièsels en marxa.', '');
+  if (settings.assist) msg('Assistència activada: premeu L per fixar el blanc més proper a la retícula.', 'radio');
+};
+window.__sim = { scene, sub, ships, tdc, M, step, torps, settings, solveFiring, look, ocean, setView, stageStart, get simT(){ return simT; } };
+</script>
+</body>
+</html>
